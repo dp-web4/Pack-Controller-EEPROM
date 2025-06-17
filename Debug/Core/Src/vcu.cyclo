@@ -1,0 +1,16 @@
+vcu.c:79:6:VCU_ReceiveMessages	8
+vcu.c:114:6:VCU_TransmitMessageQueue	4
+vcu.c:145:6:VCU_ProcessVcuCommand	7
+vcu.c:205:6:VCU_ProcessVcuTime	2
+vcu.c:236:6:VCU_ProcessReadEeprom	5
+vcu.c:299:6:VCU_ProcessWriteEeprom	5
+vcu.c:369:10:VCU_TicksSinceLastMessage	2
+vcu.c:392:6:VCU_TransmitBmsState	3
+vcu.c:442:6:VCU_TransmitBmsData1	2
+vcu.c:493:6:VCU_TransmitBmsData2	2
+vcu.c:550:6:VCU_TransmitBmsData3	2
+vcu.c:603:6:VCU_TransmitBmsData5	2
+vcu.c:657:6:VCU_TransmitBmsData8	2
+vcu.c:699:6:VCU_TransmitBmsData9	2
+vcu.c:740:6:VCU_TransmitBmsData10	2
+vcu.c:778:6:VCU_RequestTime	2

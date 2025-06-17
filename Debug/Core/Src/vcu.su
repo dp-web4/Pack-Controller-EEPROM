@@ -1,0 +1,16 @@
+../Core/Src/vcu.c:79:6:VCU_ReceiveMessages	64	static
+../Core/Src/vcu.c:114:6:VCU_TransmitMessageQueue	32	static,ignoring_inline_asm
+../Core/Src/vcu.c:145:6:VCU_ProcessVcuCommand	32	static
+../Core/Src/vcu.c:205:6:VCU_ProcessVcuTime	24	static
+../Core/Src/vcu.c:236:6:VCU_ProcessReadEeprom	32	static
+../Core/Src/vcu.c:299:6:VCU_ProcessWriteEeprom	32	static
+../Core/Src/vcu.c:369:10:VCU_TicksSinceLastMessage	24	static
+../Core/Src/vcu.c:392:6:VCU_TransmitBmsState	32	static
+../Core/Src/vcu.c:442:6:VCU_TransmitBmsData1	24	static
+../Core/Src/vcu.c:493:6:VCU_TransmitBmsData2	24	static
+../Core/Src/vcu.c:550:6:VCU_TransmitBmsData3	24	static
+../Core/Src/vcu.c:603:6:VCU_TransmitBmsData5	24	static
+../Core/Src/vcu.c:657:6:VCU_TransmitBmsData8	16	static
+../Core/Src/vcu.c:699:6:VCU_TransmitBmsData9	16	static
+../Core/Src/vcu.c:740:6:VCU_TransmitBmsData10	16	static
+../Core/Src/vcu.c:778:6:VCU_RequestTime	8	static
