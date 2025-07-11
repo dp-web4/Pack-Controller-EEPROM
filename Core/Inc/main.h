@@ -34,6 +34,9 @@ extern uint16_t        CAN1_INT0_EXTI_IRQn ;
 extern uint16_t        CAN1_INT1_Pin ;
 extern GPIO_TypeDef  * CAN1_INT1_GPIO_Port ;
 extern uint16_t        CAN1_INT1_EXTI_IRQn ;
+extern uint16_t        CAN1_INT_Pin ;
+extern GPIO_TypeDef  * CAN1_INT_GPIO_Port ;
+extern uint16_t        CAN1_INT_EXTI_IRQn ;
 extern uint16_t        SPI2_CS1_Pin ;
 extern GPIO_TypeDef  * SPI2_CS1_GPIO_Port ;
 extern uint16_t        SPI2_CS2_Pin ;
@@ -58,9 +61,6 @@ extern uint16_t        CAN2_INT0_EXTI_IRQn ;
 extern uint16_t        CAN2_INT1_Pin ;
 extern GPIO_TypeDef  * CAN2_INT1_GPIO_Port ;
 extern uint16_t        CAN2_INT1_EXTI_IRQn ;
-extern uint16_t        CAN1_INT_Pin ;
-extern GPIO_TypeDef  * CAN1_INT_GPIO_Port ;
-extern uint16_t        CAN1_INT_EXTI_IRQn ;
 extern uint16_t        BUTTON2_Pin ;
 extern GPIO_TypeDef  * BUTTON2_GPIO_Port ;
 extern uint16_t        BUTTON2_EXTI_IRQn ;
@@ -69,6 +69,42 @@ extern GPIO_TypeDef  * BUTTON3_GPIO_Port ;
 extern uint16_t        BUTTON3_EXTI_IRQn ;
 extern uint16_t        LED_BLUE_Pin ;
 extern GPIO_TypeDef  * LED_BLUE_GPIO_Port ;
+
+extern uint16_t        CAN3_INT_Pin ;
+extern GPIO_TypeDef  * CAN3_INT_GPIO_Port ;
+extern uint16_t        CAN3_INT_EXTI_IRQn ;
+extern uint16_t        CAN3_INT0_Pin ;
+extern GPIO_TypeDef  * CAN3_INT0_GPIO_Port ;
+extern uint16_t        CAN3_INT0_EXTI_IRQn ;
+extern uint16_t        CAN3_INT1_Pin ;
+extern GPIO_TypeDef  * CAN3_INT1_GPIO_Port ;
+extern uint16_t        CAN3_INT1_EXTI_IRQn ;
+extern uint16_t        CAN3_CS_Pin ;
+extern GPIO_TypeDef  * CAN3_CS_GPIO_Port ;
+
+extern uint16_t        BUTTON4_Pin ;
+extern GPIO_TypeDef  * BUTTON4_GPIO_Port ;
+extern uint16_t        BUTTON4_EXTI_IRQn ;
+
+extern uint16_t        LED_CAN1_Pin ;
+extern GPIO_TypeDef  * LED_CAN1_GPIO_Port ;
+extern uint16_t        LED_CAN2_Pin ;
+extern GPIO_TypeDef  * LED_CAN2_GPIO_Port ;
+extern uint16_t        LED_CAN3_Pin ;
+extern GPIO_TypeDef  * LED_CAN3_GPIO_Port ;
+extern uint16_t        LED_HBEAT_Pin ;
+extern GPIO_TypeDef  * LED_HBEAT_GPIO_Port ;
+
+// ANALOG
+extern uint16_t        VDETECT_5V_Pin;
+extern GPIO_TypeDef  * VDETECT_5V_GPIO_Port;
+
+// ENABLES
+extern uint16_t        CAN_CLK_EN_Pin;
+extern GPIO_TypeDef  * CAN_CLK_EN_GPIO_Port;
+extern uint16_t        BAT_CHRG_EN_Pin;
+extern GPIO_TypeDef  * BAT_CHRG_EN_GPIO_Port;
+
 /* USER CODE END ET */
 
 /* Exported constants --------------------------------------------------------*/
@@ -145,16 +181,21 @@ void Error_Handler(void);
 
 #define CAN1            0
 #define CAN2            1
+#define CAN3            2
 #define VCU_CAN         CAN1
 #define MCU_CAN         CAN2
+#define MCU2_CAN        CAN3
+
 
 // Debug Levels
-#define DEBUG_LEVEL     (DBG_ERRORS | DBG_VCU)
+#define DEBUG_LEVEL     (DBG_MCU | DBG_ERRORS | DBG_COMMS)
 #define DBG_DISABLED    0x00
 #define DBG_ERRORS      0x01
-#define DBG_MCU         0x02
-#define DBG_VCU         0x04
-#define DBG_VERBOSE     0x08
+#define DBG_COMMS       0x02  // TX and RX messages
+#define DBG_MCU         0x08
+#define DBG_VCU         0x10
+#define DBG_VERBOSE     0x80
+#define DBG_ALL         0xFF
 
 #define VALIDATE_HARDWARE 1 // checks for maximum charge/discharge in range - put module in fault if invalid
 
@@ -162,12 +203,11 @@ extern uint8_t debugLevel;
 
 
 //LED's
-#define RED_LED         0
-#define GREEN_LED       1
-#define BLUE_LED        2
-#define MCU_RX_LED      GREEN_LED
-#define VCU_RX_LED      RED_LED
 
+#define VCU_RX_LED      0
+#define MCU_RX_LED      1
+#define MCU2_RX_LED     2
+#define HBEAT_LED       3
 
 
 // Code anchor for break points
@@ -175,7 +215,7 @@ extern uint8_t debugLevel;
 
 extern uint32_t      eeVarDataTab[NB_OF_VARIABLES+1];
 
-
+extern uint8_t hwPlatform;
 extern uint8_t  EE_PACK_ID;
 extern void switchLedOn(uint8_t led);
 extern void switchLedOff(uint8_t led);
@@ -190,6 +230,7 @@ extern uint32_t etTimerOverflows;
 extern TIM_HandleTypeDef htim1;
 extern uint8_t decSec;
 extern uint8_t sendState;
+extern uint8_t sendMaxState;
 extern void writeRTC(time_t now);
 extern time_t readRTC(void);
 

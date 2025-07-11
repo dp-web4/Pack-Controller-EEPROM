@@ -46,6 +46,9 @@ CAN_ERROR_STATE vcu_errorFlags;
 
 
 void VCU_ProcessVcuCommand(void);
+void VCU_ProcessVcuModuleCommand(void);
+void VCU_ProcessVcuKeepAlive(void);
+
 void VCU_ProcessVcuTime(void);
 void VCU_ReceiveMessages(void);
 void VCU_TransmitBmsData1(void);
@@ -58,6 +61,16 @@ void VCU_TransmitBmsData10(void);
 void VCU_RequestTime(void);
 void VCU_ProcessReadEeprom(void);
 void VCU_ProcessWriteEeprom(void);
+void VCU_ProcessVcuRequestModuleList(void);
+
+void VCU_TransmitModuleState(void);
+void VCU_TransmitModulePower(void);
+void VCU_TransmitModuleCellVoltage(void);
+void VCU_TransmitModuleCellTemp(void);
+void VCU_TransmitModuleCellId(void);
+void VCU_TransmitModuleLimits(void);
+void VCU_TransmitModuleList(void);
+
 
 extern batteryPack pack;
 
@@ -85,7 +98,7 @@ void VCU_ReceiveMessages(void)
     // Get message
     DRV_CANFDSPI_ReceiveMessageGet(CAN1, VCU_RX_FIFO, &vcu_rxObj, vcu_rxd, MAX_DATA_BYTES);
 
-    if((debugLevel & (DBG_VCU + DBG_VERBOSE)) == (DBG_VCU + DBG_VERBOSE)){ sprintf(tempBuffer,"VCU RX SID=0x%03x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",vcu_rxObj.bF.id.SID,vcu_rxd[0],vcu_rxd[1],vcu_rxd[2],vcu_rxd[3],vcu_rxd[4],vcu_rxd[5],vcu_rxd[6],vcu_rxd[7]); serialOut(tempBuffer);}
+    if((debugLevel & (DBG_VCU + DBG_COMMS)) == (DBG_VCU + DBG_COMMS)){ sprintf(tempBuffer,"VCU RX SID=0x%03x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",vcu_rxObj.bF.id.SID,vcu_rxd[0],vcu_rxd[1],vcu_rxd[2],vcu_rxd[3],vcu_rxd[4],vcu_rxd[5],vcu_rxd[6],vcu_rxd[7]); serialOut(tempBuffer);}
 
     if(vcu_rxObj.bF.id.SID == ID_VCU_COMMAND  + pack.vcuCanOffset){
         /// Process the command
@@ -97,6 +110,12 @@ void VCU_ReceiveMessages(void)
         VCU_ProcessReadEeprom();
     } else if(vcu_rxObj.bF.id.SID == ID_VCU_WRITE_EEPROM + pack.vcuCanOffset){
         VCU_ProcessWriteEeprom();
+    } else if(vcu_rxObj.bF.id.SID == ID_VCU_MODULE_COMMAND + pack.vcuCanOffset){
+        VCU_ProcessVcuModuleCommand();
+    } else if(vcu_rxObj.bF.id.SID == ID_VCU_KEEP_ALIVE + pack.vcuCanOffset){
+        VCU_ProcessVcuKeepAlive();
+    } else if(vcu_rxObj.bF.id.SID == ID_VCU_REQUEST_MODULE_LIST + pack.vcuCanOffset){
+        VCU_ProcessVcuRequestModuleList();
     } else {
        // Unknown Message
         if((debugLevel & ( DBG_VCU + DBG_ERRORS))==( DBG_VCU + DBG_ERRORS)){ sprintf(tempBuffer,"VCU RX UNKNOWN SID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",vcu_rxObj.bF.id.SID,vcu_rxObj.bF.id.EID,vcu_rxd[0],vcu_rxd[1],vcu_rxd[2],vcu_rxd[3],vcu_rxd[4],vcu_rxd[5],vcu_rxd[6],vcu_rxd[7]); serialOut(tempBuffer);}
@@ -134,6 +153,13 @@ void VCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index)
 
   // Load message and transmit
   uint8_t n = DRV_CANFDSPI_DlcToDataBytes(vcu_txObj.bF.ctrl.DLC);
+  
+  // Log TX message if DBG_COMMS is enabled
+  if((debugLevel & (DBG_VCU + DBG_COMMS)) == (DBG_VCU + DBG_COMMS)){
+      sprintf(tempBuffer,"VCU TX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
+              vcu_txObj.bF.id.SID, vcu_txObj.bF.id.EID, vcu_txd[0], vcu_txd[1], vcu_txd[2], vcu_txd[3], vcu_txd[4], vcu_txd[5], vcu_txd[6], vcu_txd[7]);
+      serialOut(tempBuffer);
+  }
 
   DRV_CANFDSPI_TransmitChannelLoad(index, VCU_TX_FIFO, &vcu_txObj, vcu_txd, n, true);
 }
@@ -151,6 +177,9 @@ void VCU_ProcessVcuCommand(void){
   pack.vcuLastContact.overflows = etTimerOverflows ;
   pack.vcuLastContact.ticks =  htim1.Instance->CNT;
 
+  // received a pack message so set mode to pack mode
+  pack.controlMode = packMode;
+
   // copy received data to status structure
   memset(&command,0,sizeof(command));
   memcpy(&command, vcu_rxd, sizeof(command));
@@ -167,7 +196,6 @@ void VCU_ProcessVcuCommand(void){
 
   // pack hv bus voltage is encoder the same as vcu so no need to convert it
   pack.vcuHvBusVoltage = command.vcu_hv_bus_voltage;
-
 
 
   if(pack.vcuRequestedState != command.vcu_contactor_ctrl){
@@ -196,8 +224,83 @@ void VCU_ProcessVcuCommand(void){
         break;
     }
   }
-  if(debugLevel & DBG_VCU){ sprintf(tempBuffer,"VCU RX 0x%03x VCU Command : STATE=%02x HV=%.2fV", vcu_txObj.bF.id.SID, pack.vcuRequestedState, pack.vcuHvBusVoltage * MODULE_VOLTAGE_FACTOR); serialOut(tempBuffer);}
+  if((debugLevel & DBG_VCU) == DBG_VCU){ sprintf(tempBuffer,"VCU RX 0x%03x VCU Command : STATE=%02x HV=%.2fV", vcu_txObj.bF.id.SID, pack.vcuRequestedState, pack.vcuHvBusVoltage * MODULE_VOLTAGE_FACTOR); serialOut(tempBuffer);}
 }
+
+
+/***************************************************************************************************************
+*     V C U _ P r o c e s s V c u M o d u l e C o m m a n d                        P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_ProcessVcuModuleCommand(void){
+
+  CANFRM_0x404_VCU_MODULE_COMMAND moduleCommand;
+
+  // Heartbeat - update last contact
+  pack.vcuLastContact.overflows = etTimerOverflows ;
+  pack.vcuLastContact.ticks =  htim1.Instance->CNT;
+
+  // received a pack message so set mode to direct module control (DMC) mode
+  pack.controlMode = dmcMode;
+
+  // copy received data to status structure
+  memset(&moduleCommand,0,sizeof(moduleCommand));
+  memcpy(&moduleCommand, vcu_rxd, sizeof(moduleCommand));
+
+  // set the DMC module ID
+  pack.dmcModuleId = moduleCommand.module_id;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if((debugLevel & (DBG_VCU + DBG_ERRORS)) == (DBG_VCU + DBG_ERRORS)) {sprintf(tempBuffer,"VCU RX ERROR - VCU_ProcessVcuModuleCommand - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    if(module[moduleIndex].currentState != moduleCommand.module_contactor_ctrl){
+      // State Change! Set requested state
+      module[moduleIndex].nextState = moduleCommand.module_contactor_ctrl;
+    }
+/*
+ * NOT YET IMPLEMENTED
+ *
+ * moduleCommand.module_cell_balance_ctrl
+ * moduleCommand.module_hv_bus_actv_iso
+ * moduleCommand.vcu_hv_bus_voltage
+ *
+ */
+    if((debugLevel & DBG_VCU) == DBG_VCU){ sprintf(tempBuffer,"VCU RX 0x%03x VCU Module Command : STATE=%02x", vcu_txObj.bF.id.SID, moduleCommand.module_contactor_ctrl); serialOut(tempBuffer);}
+  }
+}
+
+
+/***************************************************************************************************************
+*     V C U _ P r o c e s s V c u K e e p A l i v e                                P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_ProcessVcuKeepAlive(void){
+
+  CANFRM_0x405_VCU_KEEP_ALIVE keepAlive;
+
+  // Heartbeat - update last contact
+  pack.vcuLastContact.overflows = etTimerOverflows ;
+  pack.vcuLastContact.ticks =  htim1.Instance->CNT;
+
+  // copy received data to status structure
+  memset(&keepAlive,0,sizeof(keepAlive));
+  memcpy(&keepAlive, vcu_rxd, sizeof(keepAlive));
+
+  // Is this a keepalive in DMC mode? If it is, then the module Id will be set
+  if(keepAlive.module_id > 0){
+    // yes - set mode to direct module control (DMC) mode
+    pack.controlMode = dmcMode;
+    // set the DMC module ID
+    pack.dmcModuleId = keepAlive.module_id;
+  } else {
+    // No module ID set, so its a pack keep-alive. Set to pack mode.
+    pack.controlMode = packMode;
+  }
+
+  if((debugLevel & DBG_VCU) == DBG_VCU){ sprintf(tempBuffer,"VCU RX 0x%03x VCU Keep Alive", vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+}
+
 
 /***************************************************************************************************************
 *     V C U _ P r o c e s s V c u T i m e                                          P A C K   C O N T R O L L E R
@@ -209,7 +312,7 @@ void VCU_ProcessVcuTime(void){
 
   CANFRM_0x401_VCU_TIME vcuTime;
 
-  if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU RX 0x%03x VCU_TIME",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+  if((debugLevel & DBG_VCU) == DBG_VCU) {sprintf(tempBuffer,"VCU RX 0x%03x VCU_TIME",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
 
   // Heartbeat - update last contact
   pack.vcuLastContact.overflows = etTimerOverflows ;
@@ -246,7 +349,7 @@ void VCU_ProcessReadEeprom(void){
   uint16_t  eepromRegister;
   uint32_t  eepromData = 0;
   EE_Status eeStatus;
-  if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU RX 0x%03x VCU_READ_EEPROM",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+  if((debugLevel & DBG_VCU) == DBG_VCU) {sprintf(tempBuffer,"VCU RX 0x%03x VCU_READ_EEPROM",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
 
   // Heartbeat - update last contact
   pack.vcuLastContact.overflows = etTimerOverflows ;
@@ -361,6 +464,13 @@ void VCU_ProcessWriteEeprom(void){
 }
 
 
+/***************************************************************************************************************
+*    V C U _ P r o c e s s V c u R e q u e s t M o d u l e L i s t                 P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_ProcessVcuRequestModuleList(void)
+{
+
+}
 
 /***************************************************************************************************************
 *    V C U _ T i c k s S i n c e L a s t M e s s a g e                             P A C K   C O N T R O L L E R
@@ -769,6 +879,277 @@ void VCU_TransmitBmsData10(void){
 
   VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
 
+}
+
+
+
+/***************************************************************************************************************
+*     V C U _ T r a n s m i t M o d u l e S t a t e                                P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModuleState(void)
+{
+  CANFRM_0x411_MODULE_STATE moduleState;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if((debugLevel & (DBG_VCU + DBG_ERRORS)) == (DBG_VCU + DBG_ERRORS)) {sprintf(tempBuffer,"VCU TX ERROR - VCU_TransmitModuleState - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    // No conversions necessary - VCU uses the same module voltage/current/temperature/percentage base and factor as the module.
+    moduleState.module_id                   = pack.dmcModuleId;
+    moduleState.module_soc                  = module[moduleIndex].soc;
+    moduleState.module_state                = module[moduleIndex].currentState;
+    moduleState.module_status               = module[moduleIndex].status;
+    moduleState.module_soh                  = module[moduleIndex].soh;
+    moduleState.module_fault_code           = module[moduleIndex].faultCode.commsError | module[moduleIndex].faultCode.hwIncompatible << 1 | module[moduleIndex].faultCode.overCurrent << 2 | module[moduleIndex].faultCode.overTemperature << 3 | module[moduleIndex].faultCode.overVoltage << 4;
+    moduleState.module_cell_balance_active  = 0;
+    moduleState.module_cell_balance_status  = 0;
+    moduleState.module_count_total          = pack.moduleCount;
+    moduleState.module_count_active         = pack.activeModules;
+    moduleState.module_cell_count           = module[moduleIndex].cellCount;
+
+    // clear bit fields
+    vcu_txObj.word[0] = 0;                              // Configure transmit message
+    vcu_txObj.word[1] = 0;
+    vcu_txObj.word[2] = 0;
+
+    memcpy(vcu_txd, &moduleState, sizeof(moduleState));
+
+    vcu_txObj.bF.id.SID = ID_MODULE_STATE + pack.vcuCanOffset;   // Standard ID + 0x000 for pack 0, +0x100 for pack 1
+    vcu_txObj.bF.id.EID = 0   ;                         // Extended ID
+
+    vcu_txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    vcu_txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
+    vcu_txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    vcu_txObj.bF.ctrl.IDE = 0;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU TX 0x%03x MODULE_STATE",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+
+    VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
+  }
+}
+
+
+/***************************************************************************************************************
+*     V C U _ T r a n s m i t M o d u l e P o w e r                                P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModulePower(void)
+{
+  CANFRM_0x412_MODULE_POWER modulePower;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if((debugLevel & (DBG_VCU + DBG_ERRORS)) == (DBG_VCU + DBG_ERRORS)) {sprintf(tempBuffer,"VCU TX ERROR - VCU_TransmitModulePower - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    // No conversions necessary - VCU uses the same module voltage/current/temperature/percentage base and factor as the module.
+    modulePower.module_id       = pack.dmcModuleId;
+    modulePower.module_current  = module[moduleIndex].mmc;
+    modulePower.module_voltage  = module[moduleIndex].mmv;
+    modulePower.UNUSED_40_63    = 0;
+
+    // clear bit fields
+    vcu_txObj.word[0] = 0;                              // Configure transmit message
+    vcu_txObj.word[1] = 0;
+    vcu_txObj.word[2] = 0;
+
+    memcpy(vcu_txd, &modulePower, sizeof(modulePower));
+
+    vcu_txObj.bF.id.SID = ID_MODULE_POWER +  pack.vcuCanOffset;   // Standard ID + 0x000 for pack 0, +0x100 for pack 1
+    vcu_txObj.bF.id.EID = 0   ;                         // Extended ID
+
+    vcu_txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    vcu_txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
+    vcu_txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    vcu_txObj.bF.ctrl.IDE = 0;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU TX 0x%03x MODULE_POWER",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+
+    VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
+  }
+}
+
+
+/***************************************************************************************************************
+*    V C U _ T r a n s m i t M o d u l e C e l l V o l t a g e                     P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModuleCellVoltage(void)
+{
+  CANFRM_0x413_MODULE_CELL_VOLTAGE moduleCellVoltage;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if(debugLevel &  DBG_VCU & DBG_ERRORS) {sprintf(tempBuffer,"VCU TX ERROR - VCU_TransmitModuleCellVoltage - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    // No conversions necessary - VCU uses the same module voltage/current/temperature/percentage base and factor as the module.
+    moduleCellVoltage.module_id             = pack.dmcModuleId;
+    moduleCellVoltage.module_avg_cell_volt  = module[moduleIndex].cellAvgVolt;
+    moduleCellVoltage.module_high_cell_volt = module[moduleIndex].cellHiVolt;
+    moduleCellVoltage.module_low_cell_volt  = module[moduleIndex].cellLoVolt;
+    moduleCellVoltage.UNUSED_56_63          = 0;
+
+    // clear bit fields
+    vcu_txObj.word[0] = 0;                              // Configure transmit message
+    vcu_txObj.word[1] = 0;
+    vcu_txObj.word[2] = 0;
+
+    memcpy(vcu_txd, &moduleCellVoltage, sizeof(moduleCellVoltage));
+
+    vcu_txObj.bF.id.SID = ID_MODULE_CELL_VOLTAGE +  pack.vcuCanOffset;   // Standard ID + 0x000 for pack 0, +0x100 for pack 1
+    vcu_txObj.bF.id.EID = 0   ;                         // Extended ID
+
+    vcu_txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    vcu_txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
+    vcu_txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    vcu_txObj.bF.ctrl.IDE = 0;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU TX 0x%03x MODULE_CELL_VOLTAGE",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+
+    VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
+  }
+}
+
+/***************************************************************************************************************
+*     V C U _ T r a n s m i t M o d u l e C e l l T e m p                          P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModuleCellTemp(void)
+{
+  CANFRM_0x414_MODULE_CELL_TEMP moduleCellTemp;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if(debugLevel &  DBG_VCU & DBG_ERRORS) {sprintf(tempBuffer,"VCU TX ERROR - VCU_TransmitModuleCellTemp - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    // No conversions necessary - VCU uses the same module voltage/current/temperature/percentage base and factor as the module.
+    moduleCellTemp.module_id             = pack.dmcModuleId;
+    moduleCellTemp.module_avg_cell_temp  = module[moduleIndex].cellAvgTemp;
+    moduleCellTemp.module_high_cell_temp = module[moduleIndex].cellHiTemp;
+    moduleCellTemp.module_low_cell_temp  = module[moduleIndex].cellLoTemp;
+    moduleCellTemp.UNUSED_56_63          = 0;
+
+    // clear bit fields
+    vcu_txObj.word[0] = 0;                              // Configure transmit message
+    vcu_txObj.word[1] = 0;
+    vcu_txObj.word[2] = 0;
+
+    memcpy(vcu_txd, &moduleCellTemp, sizeof(moduleCellTemp));
+
+    vcu_txObj.bF.id.SID = ID_MODULE_CELL_TEMP +  pack.vcuCanOffset;   // Standard ID + 0x000 for pack 0, +0x100 for pack 1
+    vcu_txObj.bF.id.EID = 0   ;                         // Extended ID
+
+    vcu_txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    vcu_txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
+    vcu_txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    vcu_txObj.bF.ctrl.IDE = 0;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU TX 0x%03x MODULE_CELL_TEMP",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+
+    VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
+  }
+}
+/***************************************************************************************************************
+*     V C U _ T r a n s m i t M o d u l e C e l l I d                              P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModuleCellId(void)
+{
+  /*
+   NOT YET IMPLEMENTED
+   *
+
+  CANFRM_0x415_MODULE_CELL_ID moduleCellId;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if(debugLevel &  DBG_VCU & DBG_ERRORS) {sprintf(tempBuffer,"VCU TX ERROR - VCU_TransmitModuleCellId - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    moduleCellId.module_id                  = pack.dmcModuleId;
+    moduleCellId.module_max_temp_cell_id    =
+    moduleCellId.module_min_temp_cell_id    =
+    moduleCellId.module_max_volt_cell_id    =
+    moduleCellId.module_min_volt_cell_id    =
+    moduleCellId.UNUSED_40_63             = 0;
+
+    // clear bit fields
+    vcu_txObj.word[0] = 0;                              // Configure transmit message
+    vcu_txObj.word[1] = 0;
+    vcu_txObj.word[2] = 0;
+
+    memcpy(vcu_txd, &moduleCellId, sizeof(moduleCellId));
+
+    vcu_txObj.bF.id.SID = ID_MODULE_CELL_ID +  pack.vcuCanOffset;   // Standard ID + 0x000 for pack 0, +0x100 for pack 1
+    vcu_txObj.bF.id.EID = 0   ;                         // Extended ID
+
+    vcu_txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    vcu_txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
+    vcu_txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    vcu_txObj.bF.ctrl.IDE = 0;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU TX 0x%03x MODULE_CELL_ID",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+
+    VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
+  }
+  */
+}
+/***************************************************************************************************************
+*     V C U _ T r a n s m i t M o d u l e L i m i t s                              P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModuleLimits(void)
+{
+  CANFRM_0x416_MODULE_LIMITS moduleLimits;
+
+  uint8_t moduleIndex = MCU_ModuleIndexFromId(pack.dmcModuleId);
+  if (moduleIndex == pack.moduleCount){
+    // Invalid module Id
+    if(debugLevel &  DBG_VCU & DBG_ERRORS) {sprintf(tempBuffer,"VCU TX ERROR - VCU_TransmitModuleLimits - Invalid ID 0x%02x", pack.dmcModuleId); serialOut(tempBuffer);}
+  } else {
+
+    moduleLimits.module_id                        = pack.dmcModuleId;
+    moduleLimits.module_charge_end_voltage_limit  = module[moduleIndex].maxChargeEndV;
+    moduleLimits.module_charge_limit              = module[moduleIndex].maxChargeA;
+    moduleLimits.module_dischage_limit            = module[moduleIndex].maxDischargeA;
+    moduleLimits.UNUSED_56_63                     = 0;
+
+    // clear bit fields
+    vcu_txObj.word[0] = 0;                              // Configure transmit message
+    vcu_txObj.word[1] = 0;
+    vcu_txObj.word[2] = 0;
+
+    memcpy(vcu_txd, &moduleLimits, sizeof(moduleLimits));
+
+    vcu_txObj.bF.id.SID = ID_MODULE_LIMITS +  pack.vcuCanOffset;   // Standard ID + 0x000 for pack 0, +0x100 for pack 1
+    vcu_txObj.bF.id.EID = 0   ;                         // Extended ID
+
+    vcu_txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    vcu_txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
+    vcu_txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    vcu_txObj.bF.ctrl.IDE = 0;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel &  DBG_VCU) {sprintf(tempBuffer,"VCU TX 0x%03x MODULE_LIMITS",vcu_txObj.bF.id.SID); serialOut(tempBuffer);}
+
+    VCU_TransmitMessageQueue(VCU_CAN);                     // Send it
+  }
+
+}
+/***************************************************************************************************************
+*     V C U _ T r a n s m i t M o d u l e L i s t                                  P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void VCU_TransmitModuleList(void)
+{
+  /*
+    NOT YET IMPLEMENTED
+    *
+
+  CANFRM_0x41F_MODULE_LIST moduleList;
+
+  */
 }
 
 

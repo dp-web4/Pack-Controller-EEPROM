@@ -70,7 +70,7 @@ uint32_t      eeVarDataTab[NB_OF_VARIABLES+1] = {0};
 uint32_t      eeVarValue = 0;
 
 uint8_t hwPlatform = PLATFORM_NUCLEO;
-
+//uint8_t hwPlatform = PLATFORM_MODBATT;
 
 char logtime[9];
 char txBuffer[MAX_BUFFER];
@@ -127,23 +127,29 @@ uint16_t        BUTTON2_EXTI_IRQn ;
 uint16_t        BUTTON3_Pin ;
 GPIO_TypeDef  * BUTTON3_GPIO_Port ;
 uint16_t        BUTTON3_EXTI_IRQn ;
+uint16_t        BUTTON4_Pin ;
+GPIO_TypeDef  * BUTTON4_GPIO_Port ;
+uint16_t        BUTTON4_EXTI_IRQn ;
 
-uint16_t        LED_GREEN_Pin ;
-GPIO_TypeDef  * LED_GREEN_GPIO_Port ;
-uint16_t        LED_RED_Pin ;
-GPIO_TypeDef  * LED_RED_GPIO_Port ;
-uint16_t        LED_BLUE_Pin ;
-GPIO_TypeDef  * LED_BLUE_GPIO_Port ;
 
-uint16_t        LED_CAN1_Pin ;
-GPIO_TypeDef  * LED_CAN1_GPIO_Port ;
-uint16_t        LED_CAN2_Pin ;
-GPIO_TypeDef  * LED_CAN2_GPIO_Port ;
-uint16_t        LED_CAN3_Pin ;
-GPIO_TypeDef  * LED_CAN3_GPIO_Port ;
-uint16_t        LED_HBEAT_Pin ;
-GPIO_TypeDef  * LED_HBEAT_GPIO_Port ;
+uint16_t        LED1_Pin ;
+GPIO_TypeDef  * LED1_GPIO_Port ;
+uint16_t        LED2_Pin ;
+GPIO_TypeDef  * LED2_GPIO_Port ;
+uint16_t        LED3_Pin ;
+GPIO_TypeDef  * LED3_GPIO_Port ;
+uint16_t        LED4_Pin ;
+GPIO_TypeDef  * LED4_GPIO_Port ;
 
+// ANALOG
+uint16_t        VDETECT_5V_Pin;
+GPIO_TypeDef  * VDETECT_5V_GPIO_Port;
+
+// ENABLES
+uint16_t        CAN_CLK_EN_Pin;
+GPIO_TypeDef  * CAN_CLK_EN_GPIO_Port;
+uint16_t        BAT_CHRG_EN_Pin;
+GPIO_TypeDef  * BAT_CHRG_EN_GPIO_Port;
 
 /* USER CODE END PV */
 
@@ -164,6 +170,9 @@ void getTimeBCD(void);
 void writeRTC(time_t now);
 time_t readRTC(void);
 void serialOut(char* message);
+
+uint8_t can3RxInterrupt = 0;
+uint8_t can3TxInterrupt = 0;
 uint8_t can2RxInterrupt = 0;
 uint8_t can2TxInterrupt = 0;
 uint8_t can1RxInterrupt = 0;
@@ -179,12 +188,10 @@ uint32_t etTimerOverflows = 0;
 uint8_t EE_PACK_ID = 0;
 
 
-
-
-
 uint16_t  packOffset = 0;
 
 uint8_t decSec = 0;
+uint8_t sendMaxState = 0;
 uint8_t sendState = 0;
 
 uint8_t debugLevel = DEBUG_LEVEL; //Using a global variable "debugLevel" as we may add dynamic debugging via jumpers/switches at a later date
@@ -436,34 +443,40 @@ EE_Status StoreEEPROM(uint16_t virtAddress, uint32_t data)
 ***************************************************************************************************************/
 void switchLedOn(uint8_t led)
 {
-    switch (led) {
-        case RED_LED:
-          HAL_GPIO_WritePin(LED_RED_GPIO_Port,  LED_RED_Pin , GPIO_PIN_SET);
-            break;
-        case GREEN_LED:
-          HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,  LED_GREEN_Pin , GPIO_PIN_SET);
-            break;
-        case BLUE_LED:
-            HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,  LED_BLUE_Pin , GPIO_PIN_SET);
-            break;
-        default: break;
-    }
+  switch (led) {
+      case 0:
+        HAL_GPIO_WritePin(LED1_GPIO_Port,  LED1_Pin , GPIO_PIN_SET);
+          break;
+      case 1:
+          HAL_GPIO_WritePin(LED2_GPIO_Port,  LED2_Pin , GPIO_PIN_SET);
+          break;
+      case 2:
+          HAL_GPIO_WritePin(LED3_GPIO_Port,  LED3_Pin , GPIO_PIN_SET);
+          break;
+      case 3:
+          HAL_GPIO_WritePin(LED4_GPIO_Port,  LED4_Pin , GPIO_PIN_SET);
+          break;
+      default: break;
+  }
 }
 
 void switchLedOff(uint8_t led)
 {
-    switch (led) {
-        case RED_LED:
-          HAL_GPIO_WritePin(LED_RED_GPIO_Port,  LED_RED_Pin , GPIO_PIN_RESET);
-            break;
-        case GREEN_LED:
-          HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,  LED_GREEN_Pin , GPIO_PIN_RESET);
-            break;
-        case BLUE_LED:
-            HAL_GPIO_WritePin(LED_BLUE_GPIO_Port,  LED_BLUE_Pin , GPIO_PIN_RESET);
-            break;
-        default: break;
-    }
+  switch (led) {
+      case 0:
+        HAL_GPIO_WritePin(LED1_GPIO_Port,  LED1_Pin , GPIO_PIN_RESET);
+          break;
+      case 1:
+          HAL_GPIO_WritePin(LED2_GPIO_Port,  LED2_Pin , GPIO_PIN_RESET);
+          break;
+      case 2:
+          HAL_GPIO_WritePin(LED3_GPIO_Port,  LED3_Pin , GPIO_PIN_RESET);
+          break;
+      case 3:
+          HAL_GPIO_WritePin(LED4_GPIO_Port,  LED4_Pin , GPIO_PIN_RESET);
+          break;
+      default: break;
+  }
 }
 
 
@@ -507,6 +520,16 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
   // Clear Wake Up Flag (when woken from STOP
   //__HAL_PWR_CLEAR_FLAG(PWR_FLAG_WU);
 
+  // IMPORTANT - PIN 5 and PIN 10 are duplicated - need to determine which port is the source
+
+  // BUTTON4_Pin    = GPIO_PIN_5 Port C
+  // CAN3_INT1_Pin  = GPIO_PIN_5 Port B
+
+  // BUTTON2_PIN    = GPIO_PIN_10 Port B
+  // CAN1_INT1_Pin  = GPIO_PIN_10 Port A
+
+
+
   if(GPIO_Pin == CAN1_INT_Pin){
     // CAN1 (VCU) Interrupt
   }else if (GPIO_Pin == CAN1_INT0_Pin){
@@ -533,6 +556,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin) {
 
   }else if(GPIO_Pin == BUTTON3_Pin){
 
+  }else if(GPIO_Pin == BUTTON4_Pin){
+
   }
 }
 
@@ -548,8 +573,15 @@ void HAL_TIM_PeriodElapsedCallback(TIM_HandleTypeDef *htim) {
     decSec++;
     if(decSec == 10){
       decSec = 0;
-      HAL_GPIO_TogglePin(LED_BLUE_GPIO_Port,  LED_BLUE_Pin);
+
+      if(hwPlatform == PLATFORM_NUCLEO){
+        HAL_GPIO_TogglePin(LED3_GPIO_Port,  LED3_Pin);
+      } else {
+        // PLATFORM_MODBATT
+        HAL_GPIO_TogglePin(LED4_GPIO_Port,  LED4_Pin);
+      }
     }
+    if((decSec % 2) == 0) sendMaxState = 1;
     if((decSec % 5) == 0) sendState = 1;
   }
 }
@@ -617,18 +649,7 @@ int main(void)
 
   /* USER CODE BEGIN SysInit */
 
-  /* Enable and set FLASH Interrupt priority */
-    /* FLASH interrupt is used for the purpose of pages clean up under interrupt */
-    HAL_NVIC_SetPriority(FLASH_IRQn, 0, 0);
-    HAL_NVIC_EnableIRQ(FLASH_IRQn);
-
-    /* Unlock the Flash Program Erase controller */
-    HAL_FLASH_Unlock();
-
-    /* Clear OPTVERR bit */
-    __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_OPTVERR);
-    while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_OPTVERR) != RESET) ;
-
+  // FLASH STUFF WAS HERE
 
   /* USER CODE END SysInit */
 
@@ -644,60 +665,46 @@ int main(void)
   MX_TIM1_Init();
   /* USER CODE BEGIN 2 */
 
-  //HAL_GPIO_WritePin(LED_GREEN_GPIO_Port,  LED_GREEN_Pin , GPIO_PIN_SET);    // on
 
+  /* Enable and set FLASH Interrupt priority */
+  /* FLASH interrupt is used for the purpose of pages clean up under interrupt */
+  HAL_NVIC_SetPriority(FLASH_IRQn, 0, 0);
+  HAL_NVIC_EnableIRQ(FLASH_IRQn);
 
-  //start the TIM Base generation in interrupt mode
-  //HAL_TIM_OC_Start_IT( &htim1, TIM_CHANNEL_1 );
-  HAL_TIM_Base_Start_IT(&htim1);
+  /* Unlock the Flash Program Erase controller */
+  HAL_FLASH_Unlock();
 
-  /* USER CODE END 2 */
-
-  /* Infinite loop */
-  /* USER CODE BEGIN WHILE */
+  /* Clear OPTVERR bit */
+  __HAL_FLASH_CLEAR_FLAG(FLASH_FLAG_OPTVERR);
+  while(__HAL_FLASH_GET_FLAG(FLASH_FLAG_OPTVERR) != RESET) ;
 
   // Set EEPROM emulation firmware to erase all potentially incompletely erased
   // pages if the system came from an asynchronous reset. Conditional erase is
-  // safe to use if all Flash operations where completed before the system reset */
+  // safe to use if all Flash operations where completed before the system reset
   if(__HAL_PWR_GET_FLAG(PWR_FLAG_SB) == RESET)
   {
-    /* Blink LED_OK (Green) twice at startup
-    BSP_LED_On(LED_OK);
-    HAL_Delay(100);
-    BSP_LED_Off(LED_OK);
-    HAL_Delay(100);
-    BSP_LED_On(LED_OK);
-    HAL_Delay(100);
-    BSP_LED_Off(LED_OK);
-    */
-    /* System reset comes from a power-on reset: Forced Erase */
-    /* Initialize EEPROM emulation driver (mandatory) */
+    // System reset comes from a power-on reset: Forced Erase
+    // Initialize EEPROM emulation driver (mandatory)
     eeStatus = EE_Init(EE_FORCED_ERASE);
     if(eeStatus != EE_OK) {Error_Handler();}
   }
   else
   {
-    /* Clear the Standby flag */
+    // Clear the Standby flag
     __HAL_PWR_CLEAR_FLAG(PWR_FLAG_SB);
 
-    /* Check and Clear the Wakeup flag */
+    // Check and Clear the Wakeup flag
     if (__HAL_PWR_GET_FLAG(PWR_FLAG_WUF) != RESET)
     {
       __HAL_PWR_CLEAR_FLAG(PWR_FLAG_WUF);
     }
-
-    /* Blink LED_OK (Green) upon wakeup
-    BSP_LED_On(LED_OK);
-    HAL_Delay(100);
-    BSP_LED_Off(LED_OK);
-    */
-    /* System reset comes from a STANDBY wakeup: Conditional Erase*/
-    /* Initialize EEPROM emulation driver (mandatory) */
+    // System reset comes from a STANDBY wakeup: Conditional Erase
+    // Initialize EEPROM emulation driver (mandatory)
     eeStatus = EE_Init(EE_CONDITIONAL_ERASE);
     if(eeStatus != EE_OK) {Error_Handler();}
   }
 
-
+  // Load EEPROM
   LoadAllEEPROM();
 
   // Check EEPROM has been set up
@@ -707,17 +714,52 @@ int main(void)
 
     LoadAllEEPROM();
   }
+  // Lock the Flash Program Erase controller */
   HAL_FLASH_Lock();
 
 
+  // Enable Battery Charger
+  //HAL_GPIO_WritePin(BAT_CHRG_EN_GPIO_Port,  BAT_CHRG_EN_Pin , GPIO_PIN_RESET);
 
-  // Lock the Flash Program Erase controller */
-  //HAL_FLASH_Lock();
 
-  DRV_CANFDSPI_Reset(CAN2);
+  // Cycle LED's
+  switchLedOn(VCU_RX_LED);
+  HAL_Delay(250);
+  switchLedOff(VCU_RX_LED);
+  switchLedOn(MCU_RX_LED);
+  HAL_Delay(250);
+  switchLedOff(MCU_RX_LED);
+  switchLedOn(MCU2_RX_LED);
+  HAL_Delay(250);
+  switchLedOff(MCU2_RX_LED);
+  switchLedOn(HBEAT_LED);
+  HAL_Delay(250);
+  switchLedOff(HBEAT_LED);
+
+  //start the TIM Base generation in interrupt mode
+  //HAL_TIM_OC_Start_IT( &htim1, TIM_CHANNEL_1 );
+  HAL_TIM_Base_Start_IT(&htim1);
+
+  // Enable CAN Clock
+  HAL_GPIO_WritePin(CAN_CLK_EN_GPIO_Port,  CAN_CLK_EN_Pin , GPIO_PIN_SET);
+
+  // Reset CAN interfaces
   DRV_CANFDSPI_Reset(CAN1);
+  DRV_CANFDSPI_Reset(CAN2);
+
+  if(hwPlatform==PLATFORM_MODBATT){
+    DRV_CANFDSPI_Reset(CAN3);
+  }
   PCU_Initialize();
 
+
+
+
+
+  /* USER CODE END 2 */
+
+  /* Infinite loop */
+  /* USER CODE BEGIN WHILE */
   while (1)
   {
     /* USER CODE END WHILE */
@@ -1203,133 +1245,131 @@ static void MX_GPIO_Init(void)
 
 
 
-CAN1_INT0_Pin         = GPIO_PIN_8;
-CAN1_INT0_GPIO_Port   = GPIOB;
-CAN1_INT0_EXTI_IRQn   = EXTI9_5_IRQn;
-CAN1_INT1_Pin         = GPIO_PIN_9;
-CAN1_INT1_GPIO_Port   = GPIOB;
-CAN1_INT1_EXTI_IRQn   = EXTI9_5_IRQn;
-SPI2_CS1_Pin          = GPIO_PIN_0;
-SPI2_CS1_GPIO_Port    = GPIOC;
-SPI2_CS2_Pin          = GPIO_PIN_3;
-SPI2_CS2_GPIO_Port    = GPIOC;
-CAN1_CS_Pin           = GPIO_PIN_5;
-CAN1_CS_GPIO_Port     = GPIOA;
-BUTTON1_Pin           = GPIO_PIN_4;
-BUTTON1_GPIO_Port     = GPIOC;
-BUTTON1_EXTI_IRQn     = EXTI4_IRQn;
-CAN2_CS_Pin           = GPIO_PIN_5;
-CAN2_CS_GPIO_Port     = GPIOC;
-LED_GREEN_Pin         = GPIO_PIN_0;
-LED_GREEN_GPIO_Port   = GPIOB;
-LED_RED_Pin           = GPIO_PIN_1;
-LED_RED_GPIO_Port     = GPIOB;
-CAN2_INT_Pin          = GPIO_PIN_12;
-CAN2_INT_GPIO_Port    = GPIOB;
-CAN2_INT_EXTI_IRQn    = EXTI15_10_IRQn;
-CAN2_INT0_Pin         = GPIO_PIN_13;
-CAN2_INT0_GPIO_Port   = GPIOB;
-CAN2_INT0_EXTI_IRQn   = EXTI15_10_IRQn;
-CAN2_INT1_Pin         = GPIO_PIN_14;
-CAN2_INT1_GPIO_Port   = GPIOB;
-CAN2_INT1_EXTI_IRQn   = EXTI15_10_IRQn;
-CAN1_INT_Pin          = GPIO_PIN_10;
-CAN1_INT_GPIO_Port    = GPIOA;
-CAN1_INT_EXTI_IRQn    = EXTI15_10_IRQn;
-BUTTON2_Pin           = GPIO_PIN_0;
-BUTTON2_GPIO_Port     = GPIOD;
-BUTTON2_EXTI_IRQn     = EXTI0_IRQn;
-BUTTON3_Pin           = GPIO_PIN_1;
-BUTTON3_GPIO_Port     = GPIOD;
-BUTTON3_EXTI_IRQn     = EXTI1_IRQn;
-LED_BLUE_Pin          = GPIO_PIN_5;
-LED_BLUE_GPIO_Port    = GPIOB;
+    CAN1_INT0_Pin         = GPIO_PIN_8;
+    CAN1_INT0_GPIO_Port   = GPIOB;
+    CAN1_INT0_EXTI_IRQn   = EXTI9_5_IRQn;
+    CAN1_INT1_Pin         = GPIO_PIN_9;
+    CAN1_INT1_GPIO_Port   = GPIOB;
+    CAN1_INT1_EXTI_IRQn   = EXTI9_5_IRQn;
+    SPI2_CS1_Pin          = GPIO_PIN_0;
+    SPI2_CS1_GPIO_Port    = GPIOC;
+    SPI2_CS2_Pin          = GPIO_PIN_3;
+    SPI2_CS2_GPIO_Port    = GPIOC;
+    CAN1_CS_Pin           = GPIO_PIN_5;
+    CAN1_CS_GPIO_Port     = GPIOA;
+    BUTTON1_Pin           = GPIO_PIN_4;
+    BUTTON1_GPIO_Port     = GPIOC;
+    BUTTON1_EXTI_IRQn     = EXTI4_IRQn;
+    CAN2_CS_Pin           = GPIO_PIN_5;
+    CAN2_CS_GPIO_Port     = GPIOC;
+    LED1_Pin              = GPIO_PIN_0; //GREEN
+    LED1_GPIO_Port        = GPIOB;
+    LED2_Pin              = GPIO_PIN_1; //RED
+    LED2_GPIO_Port        = GPIOB;
+    CAN2_INT_Pin          = GPIO_PIN_12;
+    CAN2_INT_GPIO_Port    = GPIOB;
+    CAN2_INT_EXTI_IRQn    = EXTI15_10_IRQn;
+    CAN2_INT0_Pin         = GPIO_PIN_13;
+    CAN2_INT0_GPIO_Port   = GPIOB;
+    CAN2_INT0_EXTI_IRQn   = EXTI15_10_IRQn;
+    CAN2_INT1_Pin         = GPIO_PIN_14;
+    CAN2_INT1_GPIO_Port   = GPIOB;
+    CAN2_INT1_EXTI_IRQn   = EXTI15_10_IRQn;
+    CAN1_INT_Pin          = GPIO_PIN_10;
+    CAN1_INT_GPIO_Port    = GPIOA;
+    CAN1_INT_EXTI_IRQn    = EXTI15_10_IRQn;
+    BUTTON2_Pin           = GPIO_PIN_0;
+    BUTTON2_GPIO_Port     = GPIOD;
+    BUTTON2_EXTI_IRQn     = EXTI0_IRQn;
+    BUTTON3_Pin           = GPIO_PIN_1;
+    BUTTON3_GPIO_Port     = GPIOD;
+    BUTTON3_EXTI_IRQn     = EXTI1_IRQn;
+    LED3_Pin              = GPIO_PIN_5; //BLUE
+    LED3_GPIO_Port        = GPIOB;
+
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(GPIOC, SPI2_CS1_Pin|SPI2_CS2_Pin|CAN2_CS_Pin, GPIO_PIN_RESET);
+
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(CAN1_CS_GPIO_Port, CAN1_CS_Pin, GPIO_PIN_RESET);
+
+    /*Configure GPIO pin Output Level */
+    HAL_GPIO_WritePin(GPIOB, LED1_Pin|LED2_Pin|LED3_Pin, GPIO_PIN_RESET);
+
+    /*Configure GPIO pins : CAN1_INT0_Pin CAN1_INT1_Pin CAN2_INT_Pin CAN2_INT0_Pin   CAN2_INT1_Pin */
+    GPIO_InitStruct.Pin = CAN1_INT0_Pin|CAN1_INT1_Pin|CAN2_INT_Pin|CAN2_INT0_Pin
+                            |CAN2_INT1_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /*Configure GPIO pins : SPI2_CS1_Pin SPI2_CS2_Pin CAN2_CS_Pin */
+    GPIO_InitStruct.Pin = SPI2_CS1_Pin|SPI2_CS2_Pin|CAN2_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : CAN1_CS_Pin */
+    GPIO_InitStruct.Pin = CAN1_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(CAN1_CS_GPIO_Port, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : BUTTON1_Pin */
+    GPIO_InitStruct.Pin = BUTTON1_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(BUTTON1_GPIO_Port, &GPIO_InitStruct);
+
+    /*Configure GPIO pins : LED_GREEN_Pin LED_RED_Pin LED_BLUE_Pin */
+    GPIO_InitStruct.Pin = LED1_Pin|LED2_Pin|LED3_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    /*Configure GPIO pin : CAN1_INT_Pin */
+    GPIO_InitStruct.Pin = CAN1_INT_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(CAN1_INT_GPIO_Port, &GPIO_InitStruct);
+
+    /*Configure GPIO pins : BUTTON2_Pin BUTTON3_Pin */
+    GPIO_InitStruct.Pin = BUTTON2_Pin|BUTTON3_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    /* EXTI interrupt init*/
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI1_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
+
+
+    /* USER CODE END MX_GPIO_Init_1 */
 
 
 
-
-/* USER CODE END MX_GPIO_Init_1 */
-
-  /* GPIO Ports Clock Enable */
-  __HAL_RCC_GPIOC_CLK_ENABLE();
-  __HAL_RCC_GPIOB_CLK_ENABLE();
-  __HAL_RCC_GPIOA_CLK_ENABLE();
-  __HAL_RCC_GPIOD_CLK_ENABLE();
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOC, SPI2_CS1_Pin|SPI2_CS2_Pin|CAN2_CS_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(CAN1_CS_GPIO_Port, CAN1_CS_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pin Output Level */
-  HAL_GPIO_WritePin(GPIOB, LED_GREEN_Pin|LED_RED_Pin|LED_BLUE_Pin, GPIO_PIN_RESET);
-
-  /*Configure GPIO pins : CAN1_INT0_Pin CAN1_INT1_Pin CAN2_INT_Pin CAN2_INT0_Pin
-                           CAN2_INT1_Pin */
-  GPIO_InitStruct.Pin = CAN1_INT0_Pin|CAN1_INT1_Pin|CAN2_INT_Pin|CAN2_INT0_Pin
-                          |CAN2_INT1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : SPI2_CS1_Pin SPI2_CS2_Pin CAN2_CS_Pin */
-  GPIO_InitStruct.Pin = SPI2_CS1_Pin|SPI2_CS2_Pin|CAN2_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : CAN1_CS_Pin */
-  GPIO_InitStruct.Pin = CAN1_CS_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(CAN1_CS_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : BUTTON1_Pin */
-  GPIO_InitStruct.Pin = BUTTON1_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(BUTTON1_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : LED_GREEN_Pin LED_RED_Pin LED_BLUE_Pin */
-  GPIO_InitStruct.Pin = LED_GREEN_Pin|LED_RED_Pin|LED_BLUE_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
-  HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
-
-  /*Configure GPIO pin : CAN1_INT_Pin */
-  GPIO_InitStruct.Pin = CAN1_INT_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
-  GPIO_InitStruct.Pull = GPIO_NOPULL;
-  HAL_GPIO_Init(CAN1_INT_GPIO_Port, &GPIO_InitStruct);
-
-  /*Configure GPIO pins : BUTTON2_Pin BUTTON3_Pin */
-  GPIO_InitStruct.Pin = BUTTON2_Pin|BUTTON3_Pin;
-  GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
-  GPIO_InitStruct.Pull = GPIO_PULLUP;
-  HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
-
-  /* EXTI interrupt init*/
-  HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI0_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI1_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI1_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI4_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
-
-  HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
-  HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
-
-/* USER CODE BEGIN MX_GPIO_Init_2 */
-  } else{
+    /* USER CODE BEGIN MX_GPIO_Init_2 */
+  } else {
     // PLATFORM_MODBATT
 
     // CAN2 - VCU
@@ -1341,7 +1381,7 @@ LED_BLUE_GPIO_Port    = GPIOB;
     CAN1_INT0_EXTI_IRQn   = EXTI9_5_IRQn;
     CAN1_INT1_Pin         = GPIO_PIN_10;
     CAN1_INT1_GPIO_Port   = GPIOA;
-    CAN1_INT1_EXTI_IRQn   = EXTI9_5_IRQn;
+    CAN1_INT1_EXTI_IRQn   = EXTI15_10_IRQn;
     CAN1_CS_Pin           = GPIO_PIN_14;
     CAN1_CS_GPIO_Port     = GPIOB;
 
@@ -1379,30 +1419,159 @@ LED_BLUE_GPIO_Port    = GPIOB;
 
 
     // Buttons
-    BUTTON1_Pin           = GPIO_PIN_11;
+    BUTTON1_Pin           = GPIO_PIN_11;      // BTN0 in Schematic, SW2 PCB
     BUTTON1_GPIO_Port     = GPIOB;
     BUTTON1_EXTI_IRQn     = EXTI15_10_IRQn;
-    BUTTON2_Pin           = GPIO_PIN_10;
+    BUTTON2_Pin           = GPIO_PIN_10;      // BTN1 in Schematic, SW3 PCB
     BUTTON2_GPIO_Port     = GPIOB;
-    BUTTON2_EXTI_IRQn     = EXTI0_IRQn;
-    BUTTON3_Pin           = GPIO_PIN_2;
+    BUTTON2_EXTI_IRQn     = EXTI15_10_IRQn;
+    BUTTON3_Pin           = GPIO_PIN_2;       // BTN2 in Schematic, SW4 PCB
     BUTTON3_GPIO_Port     = GPIOB;
     BUTTON3_EXTI_IRQn     = EXTI2_IRQn;
+    BUTTON4_Pin           = GPIO_PIN_5;       // NC in Schematic
+    BUTTON4_GPIO_Port     = GPIOC;
+    BUTTON4_EXTI_IRQn     = EXTI9_5_IRQn;
 
-      // LED's
-    LED_CAN1_Pin         = GPIO_PIN_0;
-    LED_CAN1_GPIO_Port   = GPIOB;
-    LED_CAN2_Pin         = GPIO_PIN_1;
-    LED_CAN2_GPIO_Port   = GPIOB;
-    LED_CAN3_Pin         = GPIO_PIN_4;
-    LED_CAN3_GPIO_Port   = GPIOE;
-    LED_HBEAT_Pin        = GPIO_PIN_12;
-    LED_HBEAT_GPIO_Port  = GPIOB;
+    // LED's
+    LED1_Pin              = GPIO_PIN_0;       // LED_CAN1 Schematic, CAN1 PCB
+    LED1_GPIO_Port        = GPIOB;
+    LED2_Pin              = GPIO_PIN_1;       // LED_CAN2 Schematic, CAN2 PCB
+    LED2_GPIO_Port        = GPIOB;
+    LED3_Pin              = GPIO_PIN_4;       // LED_CAN3 Schematic, CAN3 PCB
+    LED3_GPIO_Port        = GPIOE;
+    LED4_Pin              = GPIO_PIN_12;      // LED_HB Schematic, HB PCB
+    LED4_GPIO_Port        = GPIOB;
+
+    // ANALOG
+    VDETECT_5V_Pin       = GPIO_PIN_9;
+    VDETECT_5V_GPIO_Port = GPIOB;
+
+    // ENABLES
+    CAN_CLK_EN_Pin       = GPIO_PIN_15;
+    CAN_CLK_EN_GPIO_Port = GPIOA;
+    BAT_CHRG_EN_Pin      = GPIO_PIN_4;
+    BAT_CHRG_EN_GPIO_Port= GPIOA;
+
+
+    /* USER CODE END MX_GPIO_Init_2 */
+    /* GPIO Ports Clock Enable */
+    __HAL_RCC_GPIOA_CLK_ENABLE();
+    __HAL_RCC_GPIOB_CLK_ENABLE();
+    __HAL_RCC_GPIOC_CLK_ENABLE();
+    __HAL_RCC_GPIOD_CLK_ENABLE();
+    __HAL_RCC_GPIOE_CLK_ENABLE();
+
+    //Configure SPI2 chip selects for SD card and external IO to HIGH (active low)
+    HAL_GPIO_WritePin(GPIOC, SPI2_CS1_Pin | SPI2_CS2_Pin , GPIO_PIN_SET);
+
+    //Configure MCP2518FD chip selects initial level - HIGH (active LOW)
+    HAL_GPIO_WritePin(GPIOB, CAN1_CS_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOC, CAN2_CS_Pin, GPIO_PIN_SET);
+    HAL_GPIO_WritePin(GPIOD, CAN3_CS_Pin, GPIO_PIN_SET);
+
+    //Configure LED's initial level - LOW
+    HAL_GPIO_WritePin(GPIOB, LED1_Pin | LED2_Pin |LED4_Pin, GPIO_PIN_RESET);
+    HAL_GPIO_WritePin(GPIOE, LED3_Pin, GPIO_PIN_RESET);
+
+    // Make sure charge enable is  at initialisation - physical pull-up resistor and transistor however if it goes low we lose 3.3VP
+    HAL_GPIO_WritePin(GPIOA, BAT_CHRG_EN_Pin , GPIO_PIN_SET);
+
+    //Configure GPIO - RISING/FALLING INTERRUPTS - Port C
+    GPIO_InitStruct.Pin =  CAN1_INT0_Pin | CAN2_INT_Pin | CAN2_INT0_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    //Configure GPIO - RISING/FALLING INTERRUPTS - Port A
+    GPIO_InitStruct.Pin =  CAN1_INT1_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    //Configure GPIO pin : CAN1_INT_Pin
+    GPIO_InitStruct.Pin = CAN1_INT_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    //Configure GPIO - RISING/FALLING INTERRUPTS - Port D
+    GPIO_InitStruct.Pin =  CAN2_INT1_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_RISING_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOD, &GPIO_InitStruct);
+
+    //Configure GPIO pins - PUSH/PULL - Port C
+    GPIO_InitStruct.Pin = SPI2_CS1_Pin | SPI2_CS2_Pin | CAN2_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    // Configure GPIO pins - PUSH/PULL - Port B
+    GPIO_InitStruct.Pin = CAN1_CS_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    // Configure GPIO pin - PULLUP WITH FALLING INTERRUPTS - Port B
+    GPIO_InitStruct.Pin = BUTTON1_Pin | BUTTON2_Pin | BUTTON3_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    // Configure GPIO pin - PULLUP WITH FALLING INTERRUPTS - Port C
+    GPIO_InitStruct.Pin = BUTTON4_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_IT_FALLING;
+    GPIO_InitStruct.Pull = GPIO_PULLUP;
+    HAL_GPIO_Init(GPIOC, &GPIO_InitStruct);
+
+    // Configure GPIO Port B pins : LED_CAN1, LED_CAN2, LED_HBEAT
+    GPIO_InitStruct.Pin = LED1_Pin | LED2_Pin | LED4_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOB, &GPIO_InitStruct);
+
+    // Configure GPIO Port E pins : LED_CAN3_Pin
+    GPIO_InitStruct.Pin = LED3_Pin;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOE, &GPIO_InitStruct);
+
+    //Configure GPIO Port A pins : CAN_CLK_EN_Pin
+    GPIO_InitStruct.Pin = CAN_CLK_EN_Pin   ;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    //Configure GPIO Port A pins :  BAT_CHRG_EN_Pin
+    GPIO_InitStruct.Pin =  BAT_CHRG_EN_Pin  ;
+    GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
+    GPIO_InitStruct.Pull = GPIO_NOPULL;
+    GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
+    HAL_GPIO_Init(GPIOA, &GPIO_InitStruct);
+
+    //EXTI interrupt init
+    HAL_NVIC_SetPriority(EXTI0_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI0_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI2_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI2_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI4_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI4_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI9_5_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI9_5_IRQn);
+
+    HAL_NVIC_SetPriority(EXTI15_10_IRQn, 0, 0);
+    HAL_NVIC_EnableIRQ(EXTI15_10_IRQn);
 
 
   }
-  /* USER CODE END MX_GPIO_Init_2 */
-
 }
 
 /* USER CODE BEGIN 4 */

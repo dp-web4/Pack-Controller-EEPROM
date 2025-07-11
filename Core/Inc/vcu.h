@@ -60,4 +60,14 @@ extern void VCU_TransmitBmsData9(void);
 extern void VCU_TransmitBmsData10(void);
 extern void VCU_RequestTime(void);
 
+extern void VCU_TransmitModuleState(void);
+extern void VCU_TransmitModulePower(void);
+extern void VCU_TransmitModuleCellVoltage(void);
+extern void VCU_TransmitModuleCellTemp(void);
+extern void VCU_TransmitModuleCellId(void);
+extern void VCU_TransmitModuleLimits(void);
+extern void VCU_TransmitModuleList(void);
+
+
+
 #endif /* VCU_H_ */

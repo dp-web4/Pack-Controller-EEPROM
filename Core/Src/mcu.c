@@ -26,6 +26,7 @@
 MCU_DATA appData;
 
 lastContact vcuLastContact;
+static lastContact lastAnnounceRequest = {0, 0};  // Track last announcement request time
 
 CAN_CONFIG config;
 CAN_OPERATION_MODE opMode;
@@ -59,6 +60,7 @@ batteryPack pack;
 
 uint32_t MCU_TicksSinceLastMessage(uint8_t moduleId);
 uint32_t MCU_TicksSinceLastStateTx(uint8_t moduleId);
+uint32_t MCU_ElapsedTicks(lastContact* pLastContact);
 void MCU_TransmitState(uint8_t moduleId, moduleState state);
 uint8_t MCU_FindMaxVoltageModule(void);
 void MCU_UpdateStats(void);
@@ -134,6 +136,7 @@ void PCU_Initialize(void)
   pack.cellBalanceActive=0;
   pack.cellBalanceStatus=0;
   pack.faultedModules=0;
+  pack.controlMode = packMode;
 
   //clear the module memory structure
   uint8_t index;
@@ -149,33 +152,58 @@ void PCU_Initialize(void)
   serialOut("");
   serialOut("        ██    ██");
   serialOut("     ██ ██ ██ ██ ██");
-  serialOut("     ██ ██ ██ ██ ██     Pack Controller V1.0     (c) 2023");
+  serialOut("     ██ ██ ██ ██ ██     Pack Controller V1.0     (c) 2024");
   serialOut("     ██ ██ ██ ██ ██     Modular Battery Technologies, Inc");
   serialOut("     ██    ██    ██");
   serialOut("     m o d b a t t");
   serialOut("");
 
   passed = CAN_TestRamAccess(CAN1);
-  if (passed) { sprintf(tempBuffer,"     VCU MCP2518FD RAM TEST         (CAN1) : OK"); serialOut(tempBuffer);
-  }else{        sprintf(tempBuffer,"     VCU MCP2518FD RAM TEST         (CAN1) : FAILED!"); serialOut(tempBuffer);
+  if (passed) { sprintf(tempBuffer,  "     VCU MCP2518FD RAM TEST         (CAN1) : OK"); serialOut(tempBuffer);
+  }else{        sprintf(tempBuffer,  "     VCU MCP2518FD RAM TEST         (CAN1) : FAILED!"); serialOut(tempBuffer);
   }
   passed = CAN_TestRegisterAccess(CAN1);
-  if (passed) { sprintf(tempBuffer,"     VCU MCP2518FD REGISTER TEST    (CAN1) : OK"); serialOut(tempBuffer);
-  }else{        sprintf(tempBuffer,"     VCU MCP2518FD REGISTER TEST    (CAN1) : FAILED!"); serialOut(tempBuffer);
+  if (passed) { sprintf(tempBuffer,  "     VCU MCP2518FD REGISTER TEST    (CAN1) : OK"); serialOut(tempBuffer);
+  }else{        sprintf(tempBuffer,  "     VCU MCP2518FD REGISTER TEST    (CAN1) : FAILED!"); serialOut(tempBuffer);
   }
   sprintf(tempBuffer," "); serialOut(tempBuffer);
 
-  passed = CAN_TestRamAccess(CAN2);
-  if (passed) { sprintf(tempBuffer,"     MODULE MCP2518FD RAM TEST      (CAN2) : OK"); serialOut(tempBuffer);
-  }else{        sprintf(tempBuffer,"     MODULE MCP2518FD RAM TEST      (CAN2) : FAILED!"); serialOut(tempBuffer);
-  }
+  if(hwPlatform == PLATFORM_NUCLEO){
+    passed = CAN_TestRamAccess(CAN2);
+    if (passed) { sprintf(tempBuffer,"     MCU MCP2518FD RAM TEST         (CAN2) : OK"); serialOut(tempBuffer);
+    }else{        sprintf(tempBuffer,"     MCU MCP2518FD RAM TEST         (CAN2) : FAILED!"); serialOut(tempBuffer);
+    }
 
-  passed = CAN_TestRegisterAccess(CAN2);
-  if (passed) { sprintf(tempBuffer,"     MODULE MCP2518FD REGISTER TEST (CAN2) : OK"); serialOut(tempBuffer);
-  }else{        sprintf(tempBuffer,"     MODULE MCP2518FD REGISTER TEST (CAN2) : FAILED!"); serialOut(tempBuffer);
-  }
-  sprintf(tempBuffer," "); serialOut(tempBuffer);
+    passed = CAN_TestRegisterAccess(CAN2);
+    if (passed) { sprintf(tempBuffer,"     MCU MCP2518FD REGISTER TEST    (CAN2) : OK"); serialOut(tempBuffer);
+    }else{        sprintf(tempBuffer,"     MCU MCP2518FD REGISTER TEST    (CAN2) : FAILED!"); serialOut(tempBuffer);
+    }
+    sprintf(tempBuffer," "); serialOut(tempBuffer);
+  }else{
+    // PLATFORM_MODBATT
+    passed = CAN_TestRamAccess(CAN2);
+    if (passed) { sprintf(tempBuffer,"     LO-MCU MCP2518FD RAM TEST      (CAN2) : OK"); serialOut(tempBuffer);
+    }else{        sprintf(tempBuffer,"     LO-MCU MCP2518FD RAM TEST      (CAN2) : FAILED!"); serialOut(tempBuffer);
+    }
 
+    passed = CAN_TestRegisterAccess(CAN2);
+    if (passed) { sprintf(tempBuffer,"     LO-MCU MCP2518FD REGISTER TEST (CAN2) : OK"); serialOut(tempBuffer);
+    }else{        sprintf(tempBuffer,"     LO-MCU MCP2518FD REGISTER TEST (CAN2) : FAILED!"); serialOut(tempBuffer);
+    }
+    sprintf(tempBuffer," "); serialOut(tempBuffer);
+
+    passed = CAN_TestRamAccess(CAN3);
+    if (passed) { sprintf(tempBuffer,"     HI-MCU MCP2518FD RAM TEST      (CAN3) : OK"); serialOut(tempBuffer);
+    }else{        sprintf(tempBuffer,"     HI-MCU MCP2518FD RAM TEST      (CAN3) : FAILED!"); serialOut(tempBuffer);
+    }
+
+    passed = CAN_TestRegisterAccess(CAN3);
+    if (passed) { sprintf(tempBuffer,"     HI-MCU MCP2518FD REGISTER TEST (CAN3) : OK"); serialOut(tempBuffer);
+    }else{        sprintf(tempBuffer,"     HI-MCU MCP2518FD REGISTER TEST (CAN3) : FAILED!"); serialOut(tempBuffer);
+    }
+    sprintf(tempBuffer," "); serialOut(tempBuffer);
+
+  }
   appData.state = PC_STATE_INIT;
 }
 
@@ -189,17 +217,21 @@ void PCU_Tasks(void)
   uint8_t moduleId;
   uint8_t firstModuleIndex;
   uint32_t elapsedTicks;
+  static uint8_t nextModuleToPoll = 0;
+  static lastContact lastStatusPoll = {0, 0};
 
   if(appData.state == PC_STATE_INIT){  // Application initialization
-    switchLedOn(GREEN_LED);
-    switchLedOn(RED_LED);
+
     DRV_CANFDSPI_Init(CAN1);  // VCU interface
     DRV_CANFDSPI_Init(CAN2);  // Module Controller interface
-    switchLedOff(GREEN_LED);
-    switchLedOff(RED_LED);
 
     MCU_IsolateAllModules();
     MCU_DeRegisterAllModules();
+    
+    // Request module announcements on startup
+    MCU_RequestModuleAnnouncement();
+    lastAnnounceRequest.ticks = htim1.Instance->CNT;
+    lastAnnounceRequest.overflows = etTimerOverflows;
 
     pack.vcuRequestedState = packOff;
 
@@ -224,23 +256,77 @@ void PCU_Tasks(void)
     elapsedTicks = VCU_TicksSinceLastMessage();
     if(elapsedTicks > VCU_ET_TIMEOUT){
       if ((pack.state == packOn) || (pack.state == packStandby) || (pack.state == packPrecharge)){
-        if(debugLevel & (DBG_VCU)){ sprintf(tempBuffer,"VCU ERROR - LOST CONTACT TIMEOUT!"); serialOut(tempBuffer);}
+        if((debugLevel & (DBG_VCU + DBG_ERRORS)) == (DBG_VCU + DBG_ERRORS)){ sprintf(tempBuffer,"VCU ERROR - LOST CONTACT TIMEOUT!"); serialOut(tempBuffer);}
         pack.vcuRequestedState = packOff;
       }
     }else if(elapsedTicks > VCU_ET_WARNING){
       if ((pack.state == packOn) || (pack.state == packPrecharge)){
-        if(debugLevel & (DBG_VCU)){ sprintf(tempBuffer,"VCU WARNING - LOST CONTACT WARNING!"); serialOut(tempBuffer);}
+        if((debugLevel & (DBG_VCU + DBG_ERRORS)) == (DBG_VCU + DBG_ERRORS)){ sprintf(tempBuffer,"VCU WARNING - LOST CONTACT WARNING!"); serialOut(tempBuffer);}
         pack.vcuRequestedState = packStandby;
       }
     }
+    
+    // Send periodic announcement requests
+    uint32_t timeSinceLastAnnounce = 0;
+    if ((etTimerOverflows - lastAnnounceRequest.overflows) == 0){
+      timeSinceLastAnnounce = htim1.Instance->CNT - lastAnnounceRequest.ticks;
+    } else {
+      timeSinceLastAnnounce = ((htim1.Init.Period +1) - lastAnnounceRequest.ticks) + 
+                              ((htim1.Init.Period +1) * (etTimerOverflows - (lastAnnounceRequest.overflows +1))) + 
+                              (htim1.Instance->CNT);
+    }
+    
+    if(timeSinceLastAnnounce > MCU_ANNOUNCE_REQUEST_INTERVAL){
+      MCU_RequestModuleAnnouncement();
+      lastAnnounceRequest.ticks = htim1.Instance->CNT;
+      lastAnnounceRequest.overflows = etTimerOverflows;
+    }
 
     //Check for expired last contact from module
+    if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
+      sprintf(tempBuffer,"MCU DEBUG - Checking %d modules", pack.moduleCount); 
+      serialOut(tempBuffer);
+    }
     for (index =0;index < pack.moduleCount;index++){
       elapsedTicks = MCU_TicksSinceLastMessage(module[index].moduleId);
+      if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
+        sprintf(tempBuffer,"MCU DEBUG - module[%d] ID=%02x elapsed=%lu pending=%d", 
+                index, module[index].moduleId, elapsedTicks, module[index].statusPending); 
+        serialOut(tempBuffer);
+      }
       if(elapsedTicks > MCU_ET_TIMEOUT && (module[index].statusPending == true)){
-        if( module[index].faultCode.commsError == false){
-          // Isolate Module
-          if((debugLevel & ( DBG_MCU + DBG_ERRORS)) == ( DBG_MCU + DBG_ERRORS) ){ sprintf(tempBuffer,"MCU ERROR - Module timeout ID=%02x",module[index].moduleId ); serialOut(tempBuffer);}
+        // Increment consecutive timeout counter
+        module[index].consecutiveTimeouts++;
+        
+        if(module[index].consecutiveTimeouts >= MCU_MAX_CONSECUTIVE_TIMEOUTS){
+          // Max timeouts reached - deregister the module
+          if((debugLevel & ( DBG_MCU + DBG_ERRORS)) == ( DBG_MCU + DBG_ERRORS) ){ 
+            sprintf(tempBuffer,"MCU ERROR - Module ID=%02x exceeded %d consecutive timeouts - DEREGISTERING",
+                    module[index].moduleId, MCU_MAX_CONSECUTIVE_TIMEOUTS); 
+            serialOut(tempBuffer);
+          }
+          
+          // Send deregister message to the module
+          MCU_DeRegisterModule(module[index].moduleId);
+          
+          // Remove module from pack
+          // Shift remaining modules down
+          for(int j = index; j < pack.moduleCount - 1; j++){
+            module[j] = module[j + 1];
+          }
+          pack.moduleCount--;
+          
+          // Adjust index since we removed a module
+          index--;  // Always decrement to recheck this index
+          continue;  // Skip to next iteration
+        }
+        else if( module[index].faultCode.commsError == false){
+          // First timeout or still under limit - isolate module
+          if((debugLevel & ( DBG_MCU + DBG_ERRORS)) == ( DBG_MCU + DBG_ERRORS) ){ 
+            sprintf(tempBuffer,"MCU ERROR - Module timeout ID=%02x (timeout %d of %d)",
+                    module[index].moduleId, module[index].consecutiveTimeouts, MCU_MAX_CONSECUTIVE_TIMEOUTS); 
+            serialOut(tempBuffer);
+          }
           if (pack.vcuRequestedState == packPrecharge && module[index].currentState == moduleOn){
             // This was the first module on and its faulted - select another!
             pack.powerStatus.powerStage = stageSelectModule;
@@ -251,6 +337,11 @@ void PCU_Tasks(void)
         }
       }else if(elapsedTicks > MCU_STATUS_INTERVAL && (module[index].statusPending == false)){
         // Send State
+        if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
+          sprintf(tempBuffer,"MCU DEBUG - Requesting status from module ID=%02x (index=%d)", 
+                  module[index].moduleId, index); 
+          serialOut(tempBuffer);
+        }
         MCU_RequestModuleStatus(module[index].moduleId);
         // Have we received the hardware info? This should have been sent at registration
         if(module[index].hardwarePending)
@@ -262,9 +353,109 @@ void PCU_Tasks(void)
           // if the module was in fault, bring it back online
           module[index].faultCode.commsError  = false;
         }
+        if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1 && index == 0){ 
+          sprintf(tempBuffer,"MCU DEBUG - Module ID=%02x elapsed=%lu pending=%d commsErr=%d", 
+                  module[index].moduleId, elapsedTicks, module[index].statusPending,
+                  module[index].faultCode.commsError); 
+          serialOut(tempBuffer);
+        }
       }
     }
+    
+    // Round-robin polling of modules
+    if(pack.moduleCount > 0){
+      uint32_t timeSinceLastPoll = MCU_ElapsedTicks(&lastStatusPoll);
+      
+      // Poll one module every 100ms to distribute the load
+      if(timeSinceLastPoll > 100){
+        // Find the next valid module to poll
+        uint8_t modulesToCheck = pack.moduleCount;
+        while(modulesToCheck > 0){
+          if(nextModuleToPoll >= pack.moduleCount){
+            nextModuleToPoll = 0;
+          }
+          
+          // Only poll modules that are not in timeout/error state
+          if(module[nextModuleToPoll].statusPending == false && 
+             module[nextModuleToPoll].faultCode.commsError == false){
+            if(((debugLevel & DBG_MCU) == DBG_MCU)){ 
+              sprintf(tempBuffer,"MCU DEBUG - Round-robin polling module ID=%02x (index=%d)", 
+                      module[nextModuleToPoll].moduleId, nextModuleToPoll); 
+              serialOut(tempBuffer);
+            }
+            MCU_RequestModuleStatus(module[nextModuleToPoll].moduleId);
+            
+            // Have we received the hardware info?
+            if(module[nextModuleToPoll].hardwarePending){
+              MCU_RequestHardware(module[nextModuleToPoll].moduleId);
+            }
+            
+            // Move to next module for next poll
+            nextModuleToPoll++;
+            
+            // Update last poll time
+            lastStatusPoll.ticks = htim1.Instance->CNT;
+            lastStatusPoll.overflows = etTimerOverflows;
+            break;
+          }
+          
+          nextModuleToPoll++;
+          modulesToCheck--;
+        }
+      }
+    }
+  }
 
+  if (pack.controlMode == dmcMode){
+   // DIRECT MODULE CONTROL MODE
+   // Command the modules
+    for (index =0;index < pack.moduleCount;index++){
+      // Handle the  over current condition
+      if(module[index].faultCode.overCurrent == true){
+        if (module[index].currentState != moduleOff){
+          // Turn off the module
+          module[index].nextState = moduleOff;
+          // clear the over current flag
+          module[index].faultCode.overCurrent = false;
+        }
+      } else if (module[index].faultCode.commsError == false && module[index].faultCode.hwIncompatible == false ){
+        // No faults - have we already commanded the module?
+        if((module[index].command.commandStatus == commandIssued) && (module[index].command.commandedState == module[index].nextState)){
+          // module has been commanded, allow some delay before re-issuing the command
+          if(MCU_TicksSinceLastStateTx(module[index].moduleId) > MCU_STATE_TX_INTERVAL){
+            // Command the module
+            MCU_TransmitState(module[index].moduleId,module[index].nextState);
+          }
+        }else {
+          if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
+            sprintf(tempBuffer,"MCU DEBUG - Module ID=%02x current=%d next=%d cmd=%d cmdStatus=%d", 
+                    module[index].moduleId, module[index].currentState, module[index].nextState,
+                    module[index].command.commandedState, module[index].command.commandStatus); 
+            serialOut(tempBuffer);
+          }
+          MCU_TransmitState(module[index].moduleId,module[index].nextState);
+        }
+      }
+    }
+    // This should fire every 500ms
+    if(sendState > 0){
+      // Send Module Data to VCU for module of interest
+      VCU_TransmitModuleState();
+      VCU_TransmitModulePower();
+      VCU_TransmitModuleCellVoltage();
+      VCU_TransmitModuleCellTemp();
+      VCU_TransmitModuleLimits();
+      /*
+       * NOT YET IMPLEMENTED :
+       *
+       * VCU_TransmitModuleCellId();
+       * VCU_TransmitModuleList();
+       *
+       */
+      sendState = 0;
+    }
+  } else if(pack.controlMode == packMode){
+    // PACK CONTROL MODE
     // Process power up of first module for PRECHARGE and ON states
     if(pack.vcuRequestedState == packOn || pack.vcuRequestedState == packPrecharge){
       // check for requirement to select and power up the first module
@@ -316,7 +507,7 @@ void PCU_Tasks(void)
               // set powerStage idle
               pack.powerStatus.powerStage = stageIdle;
             } else{
-              // Command the module to turn on
+              // Command the module to pre-charge state
                 module[firstModuleIndex].nextState = modulePrecharge;
             }
           }
@@ -388,9 +579,15 @@ void PCU_Tasks(void)
     //Update our pack statistics
     MCU_UpdateStats();
 
+    // This should fire every 200ms
+    if(sendMaxState >0){
+      // Broadcast Maximum State to modules
+      MCU_TransmitMaxState(pack.vcuRequestedState);
+    }
+
     // This should fire every 500ms
     if(sendState > 0){
-       // Send BMS Data to VCU
+      // Send BMS Data to VCU
       if (pack.rtcValid == false) VCU_RequestTime();
       VCU_TransmitBmsState();
       VCU_TransmitBmsData1();
@@ -689,7 +886,7 @@ void MCU_ReceiveMessages(void)
     // Get message
     DRV_CANFDSPI_ReceiveMessageGet(CAN2, MCU_RX_FIFO, &rxObj, rxd, MAX_DATA_BYTES);
 
-    if((debugLevel & (DBG_MCU + DBG_VERBOSE)) == (DBG_MCU + DBG_VERBOSE) ){ sprintf(tempBuffer,"MCU RX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",rxObj.bF.id.SID,rxObj.bF.id.EID,rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]); serialOut(tempBuffer);}
+    if((debugLevel & (DBG_MCU + DBG_COMMS)) == (DBG_MCU + DBG_COMMS) ){ sprintf(tempBuffer,"MCU RX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",rxObj.bF.id.SID,rxObj.bF.id.EID,rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]); serialOut(tempBuffer);}
 
     switch (rxObj.bF.id.SID) {
       case ID_MODULE_ANNOUNCEMENT:
@@ -760,6 +957,13 @@ void MCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index)
 
     // Load message and transmit
     uint8_t n = DRV_CANFDSPI_DlcToDataBytes(txObj.bF.ctrl.DLC);
+    
+    // Log TX message if DBG_COMMS is enabled (exclude 0x517 to prevent flooding)
+    if((debugLevel & (DBG_MCU + DBG_COMMS)) == (DBG_MCU + DBG_COMMS) && txObj.bF.id.SID != ID_MODULE_MAX_STATE){
+        sprintf(tempBuffer,"MCU TX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
+                txObj.bF.id.SID, txObj.bF.id.EID, txd[0], txd[1], txd[2], txd[3], txd[4], txd[5], txd[6], txd[7]);
+        serialOut(tempBuffer);
+    }
 
     DRV_CANFDSPI_TransmitChannelLoad(index, MCU_TX_FIFO, &txObj, txd, n, true);
 }
@@ -788,6 +992,7 @@ void MCU_RegisterModule(void){
       module[moduleIndex].faultCode.commsError  = 0;
       module[moduleIndex].lastContact.ticks     = htim1.Instance->CNT;
       module[moduleIndex].lastContact.overflows = etTimerOverflows;
+      module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
       if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU WARNING - module is already registered: ID=%02x",module[moduleIndex].moduleId); serialOut(tempBuffer);}
     }
   }
@@ -799,6 +1004,7 @@ void MCU_RegisterModule(void){
     module[moduleIndex].lastContact.ticks     = htim1.Instance->CNT;
     module[moduleIndex].lastContact.overflows = etTimerOverflows;
     module[moduleIndex].statusPending       = true;
+    module[moduleIndex].consecutiveTimeouts = 0;  // Initialize timeout counter for new module
 
     //increase moduleCount
     pack.moduleCount++;
@@ -834,6 +1040,38 @@ void MCU_RegisterModule(void){
 
   if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x510 Registration: ID=%02x, CTL=%02x, MFG=%02x, PN=%02x, UID=%08x",registration.moduleId, registration.controllerId, registration.moduleMfgId, registration.modulePartId,(int)registration.moduleUniqueId); serialOut(tempBuffer);}
   MCU_TransmitMessageQueue(CAN2);                     // Send it
+  
+  // Request initial status from newly registered module
+  MCU_RequestModuleStatus(module[moduleIndex].moduleId);
+}
+
+/***************************************************************************************************************
+*     M C U _ D e R e g i s t e r M o d u l e                                      P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void MCU_DeRegisterModule(uint8_t moduleId){
+    CANFRM_MODULE_ALL_DEREGISTER deRegistration;
+
+    // configure the packet
+    deRegistration.controllerId = pack.id;
+
+    // register the new module
+    txObj.word[0] = 0;                              // Configure transmit message
+    txObj.word[1] = 0;
+    txObj.word[2] = 0;
+
+    // copy de-registration packet to txd structure
+    memcpy(txd, &deRegistration, sizeof(deRegistration));
+
+    txObj.bF.id.SID = ID_MODULE_ALL_DEREGISTER;     // Standard ID
+    txObj.bF.id.EID = moduleId;                     // Extended ID - specific module
+
+    txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+    txObj.bF.ctrl.DLC = CAN_DLC_1;                  // 1 bytes to transmit
+    txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+    txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
+
+    if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x51E De-Register module ID=%02x", moduleId); serialOut(tempBuffer);}
+    MCU_TransmitMessageQueue(CAN2);                  // Send it
 }
 
 /***************************************************************************************************************
@@ -895,6 +1133,34 @@ void MCU_IsolateAllModules(void){
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
+/***************************************************************************************************************
+*     M C U _ R e q u e s t M o d u l e A n n o u n c e m e n t                    P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void MCU_RequestModuleAnnouncement(void){
+  CANFRM_MODULE_ANNOUNCE_REQUEST announceRequest;
+  
+  // configure the packet
+  announceRequest.controllerId = pack.id;
+  
+  // clear bitfields
+  txObj.word[0] = 0;                              // Configure transmit message
+  txObj.word[1] = 0;
+  txObj.word[2] = 0;
+  
+  // copy announcement request packet to txd structure
+  memcpy(txd, &announceRequest, sizeof(announceRequest));
+  
+  txObj.bF.id.SID = ID_MODULE_ANNOUNCE_REQUEST;   // Standard ID
+  txObj.bF.id.EID = 0;                            // Extended ID - broadcast to all
+  
+  txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
+  txObj.bF.ctrl.DLC = CAN_DLC_1;                  // 1 byte to transmit
+  txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+  txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
+  
+  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x51D Request module announcements"); serialOut(tempBuffer);}
+  MCU_TransmitMessageQueue(CAN2);                  // Send it
+}
 
 /***************************************************************************************************************
 *     M C U _ P r o c e s s M o d u l e T i m e                                    P A C K   C O N T R O L L E R
@@ -1170,6 +1436,7 @@ void MCU_ProcessModuleStatus1(void){
   }else{
     //clear status pending flag
     module[moduleIndex].statusPending = false;
+    module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
     module[moduleIndex].mmc           = status1.moduleMmc; //MODULE_CURRENT_BASE + (MODULE_CURRENT_FACTOR * status1.moduleMmc);
@@ -1255,6 +1522,7 @@ void MCU_ProcessModuleStatus2(void){
   }else{
     //clear status pending flag
     module[moduleIndex].statusPending = false;
+    module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
     module[moduleIndex].cellAvgVolt           = status2.cellAvgVolt;
@@ -1311,6 +1579,7 @@ void MCU_ProcessModuleStatus3(void){
   }else{
     //clear status pending flag
     module[moduleIndex].statusPending = false;
+    module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
     module[moduleIndex].cellAvgTemp           = status3.cellAvgTemp;
@@ -1425,7 +1694,7 @@ void MCU_TransmitState(uint8_t moduleId, moduleState state){
   CANFRM_MODULE_STATE_CHANGE stateChange;
   uint8_t index;
 
-  // request cell detail packet for cell 0
+  // set up the frame
   stateChange.moduleId = moduleId;
   stateChange.state = state;
   stateChange.UNUSED_12_15 = 0;
@@ -1457,6 +1726,50 @@ void MCU_TransmitState(uint8_t moduleId, moduleState state){
     module[index].lastTransmit.ticks      = htim1.Instance->CNT;
     module[index].lastTransmit.overflows  = etTimerOverflows;
   }
+}
+
+
+/***************************************************************************************************************
+*     M C U _ T r a n s m i t M a x S t a t e                                      P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void MCU_TransmitMaxState(moduleState state){
+
+  // This is a broadcast to all module to define their maximum permissible state
+  // i.e. They will be able to set state to anything up to and including the maximum state
+
+  CANFRM_MODULE_MAX_STATE maxState;
+
+  maxState.maximumState = state;
+  maxState.UNUSED_4_7 = 0;
+
+   // clear bit fields
+  txObj.word[0] = 0;                              // Configure transmit message
+  txObj.word[1] = 0;
+  txObj.word[2] = 0;
+
+  memcpy(txd, &maxState, sizeof(maxState));
+
+  txObj.bF.id.SID = ID_MODULE_MAX_STATE;         // Standard ID
+  txObj.bF.id.EID = pack.id;                     // Extended ID = controller ID
+
+  txObj.bF.ctrl.BRS = 0;                         // Bit Rate Switch - use DBR when set, NBR when cleared
+  txObj.bF.ctrl.DLC = CAN_DLC_1;                 // 1 bytes to transmit
+  txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
+  txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
+
+//  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x517 Maximum Permissible State, STATE=%02x",state); serialOut(tempBuffer);}
+  MCU_TransmitMessageQueue(CAN2);                    // Send it
+
+  /*
+  // Update commanded state and command status
+  index = MCU_ModuleIndexFromId(moduleId);
+  if(index != pack.moduleCount){
+    module[index].command.commandedState  = state;
+    module[index].command.commandStatus   = commandIssued;
+    module[index].lastTransmit.ticks      = htim1.Instance->CNT;
+    module[index].lastTransmit.overflows  = etTimerOverflows;
+  }
+  */
 }
 
 /***************************************************************************************************************
@@ -1594,6 +1907,27 @@ uint32_t MCU_TicksSinceLastStateTx(uint8_t moduleId)
   }
 }
 
+/***************************************************************************************************************
+*     M C U _ E l a p s e d T i c k s                                              P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+uint32_t MCU_ElapsedTicks(lastContact* pLastContact)
+{
+  uint32_t elapsedTicks;
+  uint32_t timerCNT;
+  uint32_t overFlows;
+
+  //take a snapshot of the timer counter and overflows
+  timerCNT = htim1.Instance->CNT;
+  overFlows = etTimerOverflows;
+
+  if ((overFlows - pLastContact->overflows) == 0){
+    elapsedTicks = timerCNT - pLastContact->ticks;
+  } else {
+    //             (           ticks last contact to overflow point               ) + (                           ticks in completed overflows                               ) + ( ticks in current timer period)
+    elapsedTicks = ((htim1.Init.Period +1) - pLastContact->ticks) + ( (htim1.Init.Period +1) * (overFlows - (pLastContact->overflows +1))) + (timerCNT);
+  }
+  return elapsedTicks;
+}
 
 /***************************************************************************************************************
 *     C A N _ T e s t R e g i s t e r A c c e s s                                  P A C K   C O N T R O L L E R

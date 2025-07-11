@@ -119,6 +119,12 @@ typedef struct {                  // 0x507 MODULE CELL COMMUNICATION STATUS #1 -
 }CANFRM_MODULE_CELL_COMM_STATUS_1;
 
 
+typedef struct {                    // 0x517 MODULE MAXIMUM ALLOWED STATE - 1 bytes
+  uint8_t maximumState       : 4 ; // Maximum allowed state
+  uint8_t UNUSED_4_7         : 4 ;
+}CANFRM_MODULE_MAX_STATE;
+
+
 typedef struct {                  // 0x51E ALL MODULES DEREGISTER - 1 bytes
   uint8_t controllerId  : 8;      // module ID
 }CANFRM_MODULE_ALL_DEREGISTER;

@@ -27,6 +27,7 @@
 #define ID_MODULE_STATE_CHANGE      0x514
 #define ID_MODULE_DETAIL_REQUEST    0x515
 #define ID_MODULE_TIME              0x516
+#define ID_MODULE_MAX_STATE         0x517
 #define ID_MODULE_ALL_DEREGISTER    0x51E
 #define ID_MODULE_ALL_ISOLATE       0x51F
 

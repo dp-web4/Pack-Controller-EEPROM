@@ -154,6 +154,8 @@ void MCU_ProcessModuleStatus3(void);
 
 void MCU_RequestCellDetail(uint8_t moduleId);
 void MCU_ProcessCellDetail(void);
+void MCU_TransmitMaxState(moduleState state);
+
 extern void MCU_TransmitState(uint8_t moduleId, moduleState state);
 
 //! Transmit switch state
@@ -163,7 +165,7 @@ extern uint8_t MCU_FindMaxVoltageModule(void);
 extern uint8_t MCU_ModuleIndexFromId(uint8_t moduleId);
 //extern void MCU_TransmitState(uint8_t moduleId, moduleState state);
 
-
+//extern batteryModule module[MAX_MODULES_PER_PACK];
 
 uint32_t MCU_TicksSinceLastMessage(uint8_t moduleId);
 

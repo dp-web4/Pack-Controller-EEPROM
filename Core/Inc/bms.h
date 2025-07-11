@@ -57,6 +57,11 @@ enum  ledMode{
   ledBlink2
 };
 
+typedef enum {
+  packMode = 0,
+  dmcMode = 1
+}controlMode;
+
 
 typedef struct {
   uint32_t    ticks;
@@ -172,6 +177,8 @@ typedef struct {
   errorCounts errorCounts;
   bool        rtcValid;
   uint16_t    vcuHvBusVoltage;
+  controlMode controlMode;
+  uint8_t     dmcModuleId;
 }batteryPack;
 
 

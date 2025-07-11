@@ -29,6 +29,7 @@
 
 #define DRV_CANFDSPI_INDEX_0         0
 #define DRV_CANFDSPI_INDEX_1         1
+#define DRV_CANFDSPI_INDEX_2         2
 
 #define SPI_DEFAULT_BUFFER_LENGTH 96
 
@@ -115,8 +116,11 @@ int8_t DRV_CANFDSPI_Reset(CANFDSPI_MODULE_ID index)
     spiTransmitBuffer[1] = 0;
 
     //spiTransferError = DRV_SPI_TransferData(index, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize);
-
-	if(index==CAN2){
+  if(index==CAN3){
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+    spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+  } else if(index==CAN2){
 	  HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
 	  spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
 	  HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -143,7 +147,11 @@ int8_t DRV_CANFDSPI_ReadByte(CANFDSPI_MODULE_ID index, uint16_t address, uint8_t
   spiTransmitBuffer[1] = (uint8_t) (address & 0xFF);
   spiTransmitBuffer[2] = 0;
 
-  if(index==CAN2){
+  if(index==CAN3){
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+    spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+  } else if(index==CAN2){
     HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
     spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
     HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -168,7 +176,11 @@ int8_t DRV_CANFDSPI_WriteByte(CANFDSPI_MODULE_ID index, uint16_t address, uint8_
   spiTransmitBuffer[1] = (uint8_t) (address & 0xFF);
   spiTransmitBuffer[2] = txd;
 
-  if(index==CAN2){
+  if(index==CAN3){
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+    spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+  } else if(index==CAN2){
     HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
     spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
     HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -191,7 +203,11 @@ int8_t DRV_CANFDSPI_ReadWord(CANFDSPI_MODULE_ID index, uint16_t address, uint32_
   spiTransmitBuffer[0] = (uint8_t) ((cINSTRUCTION_READ << 4) + ((address >> 8) & 0xF));
   spiTransmitBuffer[1] = (uint8_t) (address & 0xFF);
 
-  if(index==CAN2){
+  if(index==CAN3){
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+    spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+    HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+  } else if(index==CAN2){
     HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
     spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
     HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -230,7 +246,11 @@ int8_t DRV_CANFDSPI_WriteWord(CANFDSPI_MODULE_ID index, uint16_t address,
         spiTransmitBuffer[i + 2] = (uint8_t) ((txd >> (i * 8)) & 0xFF);
     }
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -253,7 +273,11 @@ int8_t DRV_CANFDSPI_ReadHalfWord(CANFDSPI_MODULE_ID index, uint16_t address, uin
     spiTransmitBuffer[0] = (uint8_t) ((cINSTRUCTION_READ << 4) + ((address >> 8) & 0xF));
     spiTransmitBuffer[1] = (uint8_t) (address & 0xFF);
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -293,7 +317,11 @@ int8_t DRV_CANFDSPI_WriteHalfWord(CANFDSPI_MODULE_ID index, uint16_t address,
         spiTransmitBuffer[i + 2] = (uint8_t) ((txd >> (i * 8)) & 0xFF);
     }
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -323,7 +351,11 @@ int8_t DRV_CANFDSPI_WriteByteSafe(CANFDSPI_MODULE_ID index, uint16_t address,
     spiTransmitBuffer[3] = (crcResult >> 8) & 0xFF;
     spiTransmitBuffer[4] = crcResult & 0xFF;
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -358,7 +390,11 @@ int8_t DRV_CANFDSPI_WriteWordSafe(CANFDSPI_MODULE_ID index, uint16_t address,
     spiTransmitBuffer[6] = (crcResult >> 8) & 0xFF;
     spiTransmitBuffer[7] = crcResult & 0xFF;
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -392,7 +428,11 @@ int8_t DRV_CANFDSPI_ReadByteArray(CANFDSPI_MODULE_ID index, uint16_t address,
         spiTransmitBuffer[i] = 0;
     }
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -438,7 +478,11 @@ int8_t DRV_CANFDSPI_ReadByteArrayWithCRC(CANFDSPI_MODULE_ID index, uint16_t addr
         spiTransmitBuffer[i] = 0;
     }
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -496,7 +540,11 @@ int8_t DRV_CANFDSPI_WriteByteArray(CANFDSPI_MODULE_ID index, uint16_t address,
     for (i = 0; i < nBytes; i++) {
         spiTransmitBuffer[i+2] = txd[i];
     }
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -540,7 +588,11 @@ int8_t DRV_CANFDSPI_WriteByteArrayWithCRC(CANFDSPI_MODULE_ID index, uint16_t add
     spiTransmitBuffer[spiTransferSize - 2] = (uint8_t) ((crcResult >> 8) & 0xFF);
     spiTransmitBuffer[spiTransferSize - 1] = (uint8_t) (crcResult & 0xFF);
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -574,7 +626,11 @@ int8_t DRV_CANFDSPI_ReadWordArray(CANFDSPI_MODULE_ID index, uint16_t address,
     for (i = 2; i < spiTransferSize; i++) {
         spiTransmitBuffer[i] = 0;
     }
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
@@ -626,7 +682,11 @@ int8_t DRV_CANFDSPI_WriteWordArray(CANFDSPI_MODULE_ID index, uint16_t address,
         }
     }
 
-    if(index==CAN2){
+    if(index==CAN3){
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_RESET);
+      spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
+      HAL_GPIO_WritePin(CAN3_CS_GPIO_Port,  CAN3_CS_Pin , GPIO_PIN_SET);
+    } else if(index==CAN2){
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_RESET);
       spiTransferError = HAL_SPI_TransmitReceive(&hspi1, spiTransmitBuffer, spiReceiveBuffer, spiTransferSize, SPI_TIMEOUT);
       HAL_GPIO_WritePin(CAN2_CS_GPIO_Port,  CAN2_CS_Pin , GPIO_PIN_SET);
