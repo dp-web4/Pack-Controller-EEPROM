@@ -2,3 +2,4 @@
 *.su
 *.o
 *.cyclo
+sync.ffs_db
