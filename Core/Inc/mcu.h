@@ -49,6 +49,8 @@
 #define MCU_ET_TIMEOUT            4000      // Module timeout 4 seconds
 #define VCU_ET_WARNING            600       // VCU warning 0.6 seconds
 #define VCU_ET_TIMEOUT            1200      // VCU timeout 1.2 seconds
+#define MCU_ANNOUNCE_REQUEST_INTERVAL 10000 // Module announcement request interval - 10 seconds
+#define MCU_MAX_CONSECUTIVE_TIMEOUTS  3     // Maximum consecutive timeouts before deregistering
 
 #define PACK_CURRENT_BASE         -1600     // amps
 #define PACK_CURRENT_FACTOR       0.05      // amps
@@ -145,8 +147,10 @@ void MCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index);
 void MCU_ReceiveMessages(void);
 
 void MCU_RegisterModule(void);
+void MCU_DeRegisterModule(uint8_t moduleId);
 void MCU_DeRegisterAllModules(void);
 void MCU_IsolateAllModules(void);
+void MCU_RequestModuleAnnouncement(void);
 void MCU_RequestModuleStatus(uint8_t moduleId);
 void MCU_ProcessModuleStatus1(void);
 void MCU_ProcessModuleStatus2(void);

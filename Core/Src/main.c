@@ -195,6 +195,7 @@ uint8_t sendMaxState = 0;
 uint8_t sendState = 0;
 
 uint8_t debugLevel = DEBUG_LEVEL; //Using a global variable "debugLevel" as we may add dynamic debugging via jumpers/switches at a later date
+uint32_t debugMessages = DEBUG_MESSAGES; //Message-specific debug flags for fine-grained control
 
 /* USER CODE END PFP */
 

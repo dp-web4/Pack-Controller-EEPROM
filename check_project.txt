@@ -1,0 +1,22 @@
+STM32CubeIDE Project Diagnostics
+================================
+
+1. Project Name in .project file: "Pack Controller EEPROM"
+2. References in .cproject have been updated to match
+
+Common STM32CubeIDE Import Issues:
+- Try "Import > General > Existing Projects into Workspace" instead of "Import from Directory"
+- Make sure to select the parent directory containing .project file
+- Check "Copy projects into workspace" if needed
+- Try refreshing the project (F5) after import
+- Check if .metadata folder in workspace is corrupted
+
+Alternative Solutions:
+1. Close STM32CubeIDE
+2. Delete .metadata folder in workspace
+3. Restart STM32CubeIDE and import project again
+
+Or try:
+1. File > New > STM32 Project from Existing STM32CubeMX Configuration File (.ioc)
+2. Browse to "Pack Controller EEPROM.ioc"
+3. This will regenerate project files

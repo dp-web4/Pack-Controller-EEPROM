@@ -135,4 +135,9 @@ typedef struct {                  // 0x51F ALL MODULES ISOLATE - 1 bytes
 }CANFRM_MODULE_ALL_ISOLATE;
 
 
+typedef struct {                  // 0x51D MODULE ANNOUNCE REQUEST - 1 bytes
+  uint8_t controllerId  : 8;      // controller ID
+}CANFRM_MODULE_ANNOUNCE_REQUEST;
+
+
 #endif /* INC_CAN_FRM_MOD_H_ */

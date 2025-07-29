@@ -18,7 +18,8 @@
 #define ID_MODULE_DETAIL            0x505
 #define ID_MODULE_TIME_REQUEST      0x506
 #define ID_MODULE_CELL_COMM_STATUS1 0x507
-#define ID_MODULE_STATUS_4          0x508
+#define ID_MODULE_CELL_COMM_STATUS2 0x508
+#define ID_MODULE_STATUS_4          0x509
 
 // Pack Controller to Module Controller
 #define ID_MODULE_REGISTRATION      0x510
@@ -26,8 +27,10 @@
 #define ID_MODULE_STATUS_REQUEST    0x512
 #define ID_MODULE_STATE_CHANGE      0x514
 #define ID_MODULE_DETAIL_REQUEST    0x515
-#define ID_MODULE_TIME              0x516
+#define ID_MODULE_SET_TIME          0x516
 #define ID_MODULE_MAX_STATE         0x517
+#define ID_MODULE_DEREGISTER        0x518
+#define ID_MODULE_ANNOUNCE_REQUEST  0x51D
 #define ID_MODULE_ALL_DEREGISTER    0x51E
 #define ID_MODULE_ALL_ISOLATE       0x51F
 

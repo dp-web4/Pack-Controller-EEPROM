@@ -68,6 +68,7 @@ void MCU_RequestHardware(uint8_t moduleId);
 void MCU_ProcessModuleHardware(void);
 void MCU_ProcessModuleTime(void);
 void MCU_ProcessCellCommStatus1(void);
+static bool MCU_ShouldLogMessage(uint16_t messageId, bool isTx);
 
 
 /***************************************************************************************************************
@@ -76,6 +77,38 @@ void MCU_ProcessCellCommStatus1(void);
 *
 ***************************************************************************************************************/
 
+/***************************************************************************************************************
+*     M C U _ S h o u l d L o g M e s s a g e                                      P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+static bool MCU_ShouldLogMessage(uint16_t messageId, bool isTx)
+{
+  // Check if general COMMS debug is enabled
+  if((debugLevel & DBG_COMMS) == 0) return false;
+  
+  // Map message IDs to debug flags
+  switch(messageId){
+    case ID_MODULE_ANNOUNCE_REQUEST:  return (debugMessages & DBG_MSG_ANNOUNCE_REQ) != 0;
+    case ID_MODULE_ANNOUNCEMENT:      return (debugMessages & DBG_MSG_ANNOUNCE) != 0;
+    case ID_MODULE_REGISTRATION:      return (debugMessages & DBG_MSG_REGISTRATION) != 0;
+    case ID_MODULE_STATUS_REQUEST:    return (debugMessages & DBG_MSG_STATUS_REQ) != 0;
+    case ID_MODULE_STATUS_1:          return (debugMessages & DBG_MSG_STATUS1) != 0;
+    case ID_MODULE_STATUS_2:          return (debugMessages & DBG_MSG_STATUS2) != 0;
+    case ID_MODULE_STATUS_3:          return (debugMessages & DBG_MSG_STATUS3) != 0;
+    case ID_MODULE_STATE_CHANGE:      return (debugMessages & DBG_MSG_STATE_CHANGE) != 0;
+    case ID_MODULE_HARDWARE_REQUEST:  return (debugMessages & DBG_MSG_HARDWARE_REQ) != 0;
+    case ID_MODULE_HARDWARE:          return (debugMessages & DBG_MSG_HARDWARE) != 0;
+    case ID_MODULE_DETAIL:            return (debugMessages & DBG_MSG_CELL_DETAIL) != 0;
+    case ID_MODULE_CELL_COMM_STATUS1: return (debugMessages & DBG_MSG_CELL_STATUS1) != 0;
+    case ID_MODULE_CELL_COMM_STATUS2: return (debugMessages & DBG_MSG_CELL_STATUS2) != 0;
+    case ID_MODULE_TIME_REQUEST:      return (debugMessages & DBG_MSG_TIME_REQ) != 0;
+    case ID_MODULE_SET_TIME:          return (debugMessages & DBG_MSG_SET_TIME) != 0;
+    case ID_MODULE_MAX_STATE:         return false; // Never log 0x517 to prevent flooding
+    case ID_MODULE_DEREGISTER:        return (debugMessages & DBG_MSG_DEREGISTER) != 0;
+    case ID_MODULE_ALL_ISOLATE:       return (debugMessages & DBG_MSG_ISOLATE_ALL) != 0;
+    case ID_MODULE_ALL_DEREGISTER:    return (debugMessages & DBG_MSG_DEREGISTER_ALL) != 0;
+    default:                          return false; // Unknown messages not logged unless DBG_MSG_ALL
+  }
+}
 
 /***************************************************************************************************************
 *
@@ -228,6 +261,10 @@ void PCU_Tasks(void)
     MCU_IsolateAllModules();
     MCU_DeRegisterAllModules();
     
+    // Always show startup message
+    sprintf(tempBuffer,"MCU STARTUP - Pack controller initialized, module count=%d", pack.moduleCount); 
+    serialOut(tempBuffer);
+    
     // Request module announcements on startup
     MCU_RequestModuleAnnouncement();
     lastAnnounceRequest.ticks = htim1.Instance->CNT;
@@ -283,17 +320,17 @@ void PCU_Tasks(void)
     }
 
     //Check for expired last contact from module
-    if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
+    /*if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
       sprintf(tempBuffer,"MCU DEBUG - Checking %d modules", pack.moduleCount); 
       serialOut(tempBuffer);
-    }
+    }*/
     for (index =0;index < pack.moduleCount;index++){
       elapsedTicks = MCU_TicksSinceLastMessage(module[index].moduleId);
-      if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
+      /*if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
         sprintf(tempBuffer,"MCU DEBUG - module[%d] ID=%02x elapsed=%lu pending=%d", 
                 index, module[index].moduleId, elapsedTicks, module[index].statusPending); 
         serialOut(tempBuffer);
-      }
+      }*/
       if(elapsedTicks > MCU_ET_TIMEOUT && (module[index].statusPending == true)){
         // Increment consecutive timeout counter
         module[index].consecutiveTimeouts++;
@@ -378,11 +415,11 @@ void PCU_Tasks(void)
           // Only poll modules that are not in timeout/error state
           if(module[nextModuleToPoll].statusPending == false && 
              module[nextModuleToPoll].faultCode.commsError == false){
-            if(((debugLevel & DBG_MCU) == DBG_MCU)){ 
+            /*if(((debugLevel & DBG_MCU) == DBG_MCU)){ 
               sprintf(tempBuffer,"MCU DEBUG - Round-robin polling module ID=%02x (index=%d)", 
                       module[nextModuleToPoll].moduleId, nextModuleToPoll); 
               serialOut(tempBuffer);
-            }
+            }*/
             MCU_RequestModuleStatus(module[nextModuleToPoll].moduleId);
             
             // Have we received the hardware info?
@@ -886,7 +923,12 @@ void MCU_ReceiveMessages(void)
     // Get message
     DRV_CANFDSPI_ReceiveMessageGet(CAN2, MCU_RX_FIFO, &rxObj, rxd, MAX_DATA_BYTES);
 
-    if((debugLevel & (DBG_MCU + DBG_COMMS)) == (DBG_MCU + DBG_COMMS) ){ sprintf(tempBuffer,"MCU RX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",rxObj.bF.id.SID,rxObj.bF.id.EID,rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]); serialOut(tempBuffer);}
+    // Log RX message based on message-specific debug flags
+    if(MCU_ShouldLogMessage(rxObj.bF.id.SID, false)){
+        sprintf(tempBuffer,"MCU RX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
+                rxObj.bF.id.SID,rxObj.bF.id.EID,rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]); 
+        serialOut(tempBuffer);
+    }
 
     switch (rxObj.bF.id.SID) {
       case ID_MODULE_ANNOUNCEMENT:
@@ -930,6 +972,7 @@ void MCU_ReceiveMessages(void)
     DRV_CANFDSPI_ReceiveChannelEventGet(CAN2, MCU_RX_FIFO, &rxFlags);
   }
 }
+
 /***************************************************************************************************************
 *     M C U _ T r a n s m i t M e s s a g e Q u e u e                              P A C K   C O N T R O L L E R
 ***************************************************************************************************************/
@@ -958,8 +1001,8 @@ void MCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index)
     // Load message and transmit
     uint8_t n = DRV_CANFDSPI_DlcToDataBytes(txObj.bF.ctrl.DLC);
     
-    // Log TX message if DBG_COMMS is enabled (exclude 0x517 to prevent flooding)
-    if((debugLevel & (DBG_MCU + DBG_COMMS)) == (DBG_MCU + DBG_COMMS) && txObj.bF.id.SID != ID_MODULE_MAX_STATE){
+    // Log TX message based on message-specific debug flags
+    if(MCU_ShouldLogMessage(txObj.bF.id.SID, true)){
         sprintf(tempBuffer,"MCU TX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
                 txObj.bF.id.SID, txObj.bF.id.EID, txd[0], txd[1], txd[2], txd[3], txd[4], txd[5], txd[6], txd[7]);
         serialOut(tempBuffer);
@@ -980,7 +1023,10 @@ void MCU_RegisterModule(void){
 
   // copy data to announcement structure
   memcpy(&announcement, rxd,sizeof(announcement));
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU RX 0x500 Announcement: FW=%02x, MFG=%02x, PN=%02x, UID=%08x",announcement.moduleFw, announcement.moduleMfgId, announcement.modulePartId,(int)announcement.moduleUniqueId); serialOut(tempBuffer);}
+  if(debugMessages & DBG_MSG_ANNOUNCE){
+    sprintf(tempBuffer,"MCU RX 0x500 Announcement: FW=%02x, MFG=%02x, PN=%02x, UID=%08x",announcement.moduleFw, announcement.moduleMfgId, announcement.modulePartId,(int)announcement.moduleUniqueId); 
+    serialOut(tempBuffer);
+  }
 
   //check whether the module is already registered and perhaps lost its registration
   moduleIndex = pack.moduleCount; //default the index to the next entry (we are using 0 so next index is the moduleCount)
@@ -993,7 +1039,10 @@ void MCU_RegisterModule(void){
       module[moduleIndex].lastContact.ticks     = htim1.Instance->CNT;
       module[moduleIndex].lastContact.overflows = etTimerOverflows;
       module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
-      if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU WARNING - module is already registered: ID=%02x",module[moduleIndex].moduleId); serialOut(tempBuffer);}
+      if(debugMessages & DBG_MSG_ANNOUNCE){
+        sprintf(tempBuffer,"MCU WARNING - module is already registered: ID=%02x",module[moduleIndex].moduleId); 
+        serialOut(tempBuffer);
+      }
     }
   }
   if (moduleIndex == pack.moduleCount){ // not previously registered, so add the new module details
@@ -1009,6 +1058,10 @@ void MCU_RegisterModule(void){
     //increase moduleCount
     pack.moduleCount++;
     module[moduleIndex].moduleId = pack.moduleCount; //first module should have a module id of 1
+    if(debugMessages & DBG_MSG_ANNOUNCE){
+      sprintf(tempBuffer,"MCU INFO - New module registered: Index=%d, ID=%02x, Total modules=%d", moduleIndex, module[moduleIndex].moduleId, pack.moduleCount); 
+      serialOut(tempBuffer);
+    }
   }
 
   // hardware ok - register the module
@@ -1038,7 +1091,10 @@ void MCU_RegisterModule(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x510 Registration: ID=%02x, CTL=%02x, MFG=%02x, PN=%02x, UID=%08x",registration.moduleId, registration.controllerId, registration.moduleMfgId, registration.modulePartId,(int)registration.moduleUniqueId); serialOut(tempBuffer);}
+  if(debugMessages & DBG_MSG_REGISTRATION){
+    sprintf(tempBuffer,"MCU TX 0x510 Registration: ID=%02x, CTL=%02x, MFG=%02x, PN=%02x, UID=%08x",registration.moduleId, registration.controllerId, registration.moduleMfgId, registration.modulePartId,(int)registration.moduleUniqueId); 
+    serialOut(tempBuffer);
+  }
   MCU_TransmitMessageQueue(CAN2);                     // Send it
   
   // Request initial status from newly registered module
@@ -1158,7 +1214,10 @@ void MCU_RequestModuleAnnouncement(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
   
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x51D Request module announcements"); serialOut(tempBuffer);}
+  if(debugMessages & DBG_MSG_ANNOUNCE_REQ){
+    sprintf(tempBuffer,"MCU TX 0x51D Request module announcements"); 
+    serialOut(tempBuffer);
+  }
   MCU_TransmitMessageQueue(CAN2);                  // Send it
 }
 
@@ -1186,7 +1245,7 @@ void MCU_ProcessModuleTime(void){
   // copy moduleTime frame to txd structure
   memcpy(txd, &moduleTime, sizeof(moduleTime));
 
-  txObj.bF.id.SID = ID_MODULE_TIME;     // Standard ID
+  txObj.bF.id.SID = ID_MODULE_SET_TIME;     // Standard ID
   txObj.bF.id.EID = 0;                            // Extended ID
 
   txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared

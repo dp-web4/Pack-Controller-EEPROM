@@ -1,6 +1,6 @@
 ################################################################################
 # Automatically-generated file. Do not edit!
-# Toolchain: GNU Tools for STM32 (10.3-2021.10)
+# Toolchain: GNU Tools for STM32 (13.3.rel1)
 ################################################################################
 
 -include ../makefile.init
@@ -60,8 +60,8 @@ all: main-build
 main-build: Pack\ Controller\ EEPROM.elf secondary-outputs
 
 # Tool invocations
-Pack\ Controller\ EEPROM.elf Pack\ Controller\ EEPROM.map: $(OBJS) $(USER_OBJS) D:\Dropbox\STM32CubeIDE\modbatt-CAN\Pack\ Controller\ EEPROM\STM32WB55RGVX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
-	arm-none-eabi-gcc -o "Pack Controller EEPROM.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"D:\Dropbox\STM32CubeIDE\modbatt-CAN\Pack Controller EEPROM\STM32WB55RGVX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Pack Controller EEPROM.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
+Pack\ Controller\ EEPROM.elf Pack\ Controller\ EEPROM.map: $(OBJS) $(USER_OBJS) C:\projects\ai-agents\Pack-Controller-EEPROM\STM32WB55RGVX_FLASH.ld makefile objects.list $(OPTIONAL_TOOL_DEPS)
+	arm-none-eabi-gcc -o "Pack Controller EEPROM.elf" @"objects.list" $(USER_OBJS) $(LIBS) -mcpu=cortex-m4 -T"C:\projects\ai-agents\Pack-Controller-EEPROM\STM32WB55RGVX_FLASH.ld" --specs=nosys.specs -Wl,-Map="Pack Controller EEPROM.map" -Wl,--gc-sections -static --specs=nano.specs -mfpu=fpv4-sp-d16 -mfloat-abi=hard -mthumb -u _printf_float -Wl,--start-group -lc -lm -Wl,--end-group
 	@echo 'Finished building target: $@'
 	@echo ' '
 

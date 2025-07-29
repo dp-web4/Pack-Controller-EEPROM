@@ -134,6 +134,7 @@ typedef struct {
   bool        hardwarePending;
   bool        statusPending;
   faultCode   faultCode;
+  uint8_t     consecutiveTimeouts;
 }batteryModule;
 
 
