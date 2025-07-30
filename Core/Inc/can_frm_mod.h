@@ -125,6 +125,12 @@ typedef struct {                    // 0x517 MODULE MAXIMUM ALLOWED STATE - 1 by
 }CANFRM_MODULE_MAX_STATE;
 
 
+typedef struct {                  // 0x518 MODULE DEREGISTER - 2 bytes
+  uint8_t moduleId      : 8;      // module ID
+  uint8_t controllerId  : 8;      // controller ID
+}CANFRM_MODULE_DEREGISTER;
+
+
 typedef struct {                  // 0x51E ALL MODULES DEREGISTER - 1 bytes
   uint8_t controllerId  : 8;      // module ID
 }CANFRM_MODULE_ALL_DEREGISTER;

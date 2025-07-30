@@ -135,6 +135,7 @@ typedef struct {
   bool        statusPending;
   faultCode   faultCode;
   uint8_t     consecutiveTimeouts;
+  uint8_t     statusMessagesReceived;  // Bitmask: bit0=Status1, bit1=Status2, bit2=Status3
 }batteryModule;
 
 

@@ -334,6 +334,7 @@ void PCU_Tasks(void)
       if(elapsedTicks > MCU_ET_TIMEOUT && (module[index].statusPending == true)){
         // Increment consecutive timeout counter
         module[index].consecutiveTimeouts++;
+        module[index].statusMessagesReceived = 0;  // Clear any partial status
         
         if(module[index].consecutiveTimeouts >= MCU_MAX_CONSECUTIVE_TIMEOUTS){
           // Max timeouts reached - deregister the module
@@ -345,6 +346,13 @@ void PCU_Tasks(void)
           
           // Send deregister message to the module
           MCU_DeRegisterModule(module[index].moduleId);
+          
+          // Log removal from pack
+          if(debugMessages & DBG_MSG_DEREGISTER){
+            sprintf(tempBuffer,"MCU INFO - Removing module from pack: ID=%02x, UID=%08x, Index=%d", 
+                    module[index].moduleId, (int)module[index].uniqueId, index);
+            serialOut(tempBuffer);
+          }
           
           // Remove module from pack
           // Shift remaining modules down
@@ -1039,8 +1047,10 @@ void MCU_RegisterModule(void){
       module[moduleIndex].lastContact.ticks     = htim1.Instance->CNT;
       module[moduleIndex].lastContact.overflows = etTimerOverflows;
       module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
+      module[moduleIndex].statusMessagesReceived = 0;  // Reset status tracking
       if(debugMessages & DBG_MSG_ANNOUNCE){
-        sprintf(tempBuffer,"MCU WARNING - module is already registered: ID=%02x",module[moduleIndex].moduleId); 
+        sprintf(tempBuffer,"MCU WARNING - Module RE-REGISTERED (was deregistered?): ID=%02x, UID=%08x",
+                module[moduleIndex].moduleId, (int)announcement.moduleUniqueId); 
         serialOut(tempBuffer);
       }
     }
@@ -1054,6 +1064,7 @@ void MCU_RegisterModule(void){
     module[moduleIndex].lastContact.overflows = etTimerOverflows;
     module[moduleIndex].statusPending       = true;
     module[moduleIndex].consecutiveTimeouts = 0;  // Initialize timeout counter for new module
+    module[moduleIndex].statusMessagesReceived = 0;  // Initialize status tracking
 
     //increase moduleCount
     pack.moduleCount++;
@@ -1105,12 +1116,13 @@ void MCU_RegisterModule(void){
 *     M C U _ D e R e g i s t e r M o d u l e                                      P A C K   C O N T R O L L E R
 ***************************************************************************************************************/
 void MCU_DeRegisterModule(uint8_t moduleId){
-    CANFRM_MODULE_ALL_DEREGISTER deRegistration;
+    CANFRM_MODULE_DEREGISTER deRegistration;
 
-    // configure the packet
+    // configure the packet - format like other module-specific messages
+    deRegistration.moduleId = moduleId;
     deRegistration.controllerId = pack.id;
 
-    // register the new module
+    // Clear transmit object
     txObj.word[0] = 0;                              // Configure transmit message
     txObj.word[1] = 0;
     txObj.word[2] = 0;
@@ -1118,15 +1130,18 @@ void MCU_DeRegisterModule(uint8_t moduleId){
     // copy de-registration packet to txd structure
     memcpy(txd, &deRegistration, sizeof(deRegistration));
 
-    txObj.bF.id.SID = ID_MODULE_ALL_DEREGISTER;     // Standard ID
+    txObj.bF.id.SID = ID_MODULE_DEREGISTER;         // Standard ID - 0x518 for individual deregister
     txObj.bF.id.EID = moduleId;                     // Extended ID - specific module
 
     txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
-    txObj.bF.ctrl.DLC = CAN_DLC_1;                  // 1 bytes to transmit
+    txObj.bF.ctrl.DLC = CAN_DLC_2;                  // 2 bytes to transmit (moduleId + controllerId)
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x51E De-Register module ID=%02x", moduleId); serialOut(tempBuffer);}
+    if(debugMessages & DBG_MSG_DEREGISTER){ 
+        sprintf(tempBuffer,"MCU TX 0x518 De-Register module ID=%02x, CTL=%02x", moduleId, pack.id); 
+        serialOut(tempBuffer);
+    }
     MCU_TransmitMessageQueue(CAN2);                  // Send it
 }
 
@@ -1155,7 +1170,10 @@ void MCU_DeRegisterAllModules(void){
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x51E De-Register all modules"); serialOut(tempBuffer);}
+    if(debugMessages & DBG_MSG_DEREGISTER_ALL){ 
+        sprintf(tempBuffer,"MCU TX 0x51E De-Register all modules"); 
+        serialOut(tempBuffer);
+    }
     MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1418,6 +1436,7 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
 
     // set request flag
     module[moduleIndex].statusPending = true;
+    module[moduleIndex].statusMessagesReceived = 0;  // Clear previous status bits
 
     // request cell detail packet for cell 0
     statusRequest.moduleId = moduleId;
@@ -1437,7 +1456,10 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
     txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x512 Request Status : ID=%02x",moduleId); serialOut(tempBuffer);}
+    if(MCU_ShouldLogMessage(ID_MODULE_STATUS_REQUEST, true)){ 
+      sprintf(tempBuffer,"MCU TX 0x512 Request Status : ID=%02x",moduleId); 
+      serialOut(tempBuffer);
+    }
     MCU_TransmitMessageQueue(CAN2);                    // Send it
   }
 }
@@ -1478,10 +1500,23 @@ void MCU_ProcessModuleStatus1(void){
   uint8_t moduleIndex;
   uint8_t index;
 
-
   // copy received data to status structure
   memset(&status1,0,sizeof(status1));
   memcpy(&status1, rxd, sizeof(status1));
+
+  // Debug output when status is received
+  if(debugMessages & DBG_MSG_STATUS1){
+    sprintf(tempBuffer,"MCU RX 0x502 Status #1: ID=%02x, State=%01x, Status=%01x, SOC=%d%%, SOH=%d%%, Cells=%d, Volt=%d, Curr=%d", 
+            rxObj.bF.id.EID, 
+            status1.moduleState & 0x0F,           // Lower 4 bits
+            (status1.moduleStatus) & 0x0F,        // Upper 4 bits  
+            status1.moduleSoc,
+            status1.moduleSoh,
+            status1.cellCount,
+            status1.moduleMmv,                     // module measured voltage
+            (int16_t)status1.moduleMmc);           // module measured current
+    serialOut(tempBuffer);
+  }
 
   //find the module index
   moduleIndex = pack.moduleCount;
@@ -1493,8 +1528,21 @@ void MCU_ProcessModuleStatus1(void){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus1()"); serialOut(tempBuffer);}
   }else{
-    //clear status pending flag
-    module[moduleIndex].statusPending = false;
+    // Track which status message was received
+    module[moduleIndex].statusMessagesReceived |= (1 << 0);  // Status1 received
+    
+    // Only clear statusPending when all 3 received
+    if(module[moduleIndex].statusMessagesReceived == 0x07) {  // All 3 bits set
+        module[moduleIndex].statusPending = false;
+        module[moduleIndex].statusMessagesReceived = 0;  // Reset for next time
+    }
+    
+    // Log timeout counter reset if it was non-zero
+    if(module[moduleIndex].consecutiveTimeouts > 0 && (debugMessages & DBG_MSG_TIMEOUT)){
+      sprintf(tempBuffer,"MCU INFO - Resetting timeout counter for module ID=%02x (was %d)", 
+              module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
+      serialOut(tempBuffer);
+    }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1568,6 +1616,17 @@ void MCU_ProcessModuleStatus2(void){
   memset(&status2,0,sizeof(status2));
   memcpy(&status2, rxd, sizeof(status2));
 
+  // Debug output when status is received
+  if(debugMessages & DBG_MSG_STATUS2){
+    sprintf(tempBuffer,"MCU RX 0x503 Status #2: ID=%02x, LoV=%dmV, HiV=%dmV, AvgV=%dmV, TotalV=%dmV", 
+            rxObj.bF.id.EID,
+            status2.cellLoVolt,
+            status2.cellHiVolt,
+            status2.cellAvgVolt,
+            status2.cellTotalV);
+    serialOut(tempBuffer);
+  }
+
   //find the module index
   moduleIndex = pack.moduleCount;
   for(index = 0; index < pack.moduleCount; index++){
@@ -1579,8 +1638,21 @@ void MCU_ProcessModuleStatus2(void){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus2()"); serialOut(tempBuffer);}
   }else{
-    //clear status pending flag
-    module[moduleIndex].statusPending = false;
+    // Track which status message was received
+    module[moduleIndex].statusMessagesReceived |= (1 << 1);  // Status2 received
+    
+    // Only clear statusPending when all 3 received
+    if(module[moduleIndex].statusMessagesReceived == 0x07) {  // All 3 bits set
+        module[moduleIndex].statusPending = false;
+        module[moduleIndex].statusMessagesReceived = 0;  // Reset for next time
+    }
+    
+    // Log timeout counter reset if it was non-zero
+    if(module[moduleIndex].consecutiveTimeouts > 0 && (debugMessages & DBG_MSG_TIMEOUT)){
+      sprintf(tempBuffer,"MCU INFO - Resetting timeout counter for module ID=%02x (was %d)", 
+              module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
+      serialOut(tempBuffer);
+    }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1625,6 +1697,16 @@ void MCU_ProcessModuleStatus3(void){
   memset(&status3,0,sizeof(status3));
   memcpy(&status3, rxd, sizeof(status3));
 
+  // Debug output when status is received  
+  if(debugMessages & DBG_MSG_STATUS3){
+    sprintf(tempBuffer,"MCU RX 0x504 Status #3: ID=%02x, LoT=%dC, HiT=%dC, AvgT=%dC", 
+            rxObj.bF.id.EID,
+            status3.cellLoTemp,
+            status3.cellHiTemp,
+            status3.cellAvgTemp);
+    serialOut(tempBuffer);
+  }
+
   //find the module index
   moduleIndex = pack.moduleCount;
   for(index = 0; index < pack.moduleCount; index++){
@@ -1636,8 +1718,21 @@ void MCU_ProcessModuleStatus3(void){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus3()"); serialOut(tempBuffer);}
   }else{
-    //clear status pending flag
-    module[moduleIndex].statusPending = false;
+    // Track which status message was received
+    module[moduleIndex].statusMessagesReceived |= (1 << 2);  // Status3 received
+    
+    // Only clear statusPending when all 3 received
+    if(module[moduleIndex].statusMessagesReceived == 0x07) {  // All 3 bits set
+        module[moduleIndex].statusPending = false;
+        module[moduleIndex].statusMessagesReceived = 0;  // Reset for next time
+    }
+    
+    // Log timeout counter reset if it was non-zero
+    if(module[moduleIndex].consecutiveTimeouts > 0 && (debugMessages & DBG_MSG_TIMEOUT)){
+      sprintf(tempBuffer,"MCU INFO - Resetting timeout counter for module ID=%02x (was %d)", 
+              module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
+      serialOut(tempBuffer);
+    }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data

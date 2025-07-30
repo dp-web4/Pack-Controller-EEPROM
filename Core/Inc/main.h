@@ -228,7 +228,7 @@ void Error_Handler(void);
 
 // Debug configuration
 #define DEBUG_LEVEL     (DBG_ERRORS)
-#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP)  // Only show registration messages by default
+#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_STATUS_REQ | DBG_MSG_STATUS1 | DBG_MSG_STATUS2 | DBG_MSG_STATUS3 | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT)  // Show registration, status requests, status responses and deregistration messages
 
 #define VALIDATE_HARDWARE 1 // checks for maximum charge/discharge in range - put module in fault if invalid
 
