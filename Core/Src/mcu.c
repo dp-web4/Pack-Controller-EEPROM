@@ -1325,14 +1325,14 @@ void MCU_RequestHardware(uint8_t moduleId){
   uint8_t index;
 
   //find the module index
-  moduleIndex = pack.moduleCount;
+  moduleIndex = MAX_MODULES_PER_PACK;
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(moduleId == module[index].moduleId)
       moduleIndex = index; // found it - save the index
     }
-  if (moduleIndex == pack.moduleCount){
+  if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_RequestHardware()"); serialOut(tempBuffer);}
   }else{
@@ -1382,7 +1382,7 @@ void MCU_ProcessModuleHardware(void){
   memcpy(&hardware, rxd, sizeof(hardware));
 
   //find the module index
-  moduleIndex = pack.moduleCount;
+  moduleIndex = MAX_MODULES_PER_PACK;
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
@@ -1390,7 +1390,7 @@ void MCU_ProcessModuleHardware(void){
       moduleIndex = index; // found it - save the index
   }
 
-  if (moduleIndex == pack.moduleCount){
+  if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleHardware()"); serialOut(tempBuffer);}
   }else{
@@ -1464,14 +1464,14 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
   uint8_t index;
 
   //find the module index
-  moduleIndex = pack.moduleCount;
+  moduleIndex = MAX_MODULES_PER_PACK;
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(moduleId == module[index].moduleId)
       moduleIndex = index; // found it - save the index
     }
-  if (moduleIndex == pack.moduleCount){
+  if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_RequestModuleStatus()"); serialOut(tempBuffer);}
   }else{
@@ -1571,13 +1571,13 @@ void MCU_ProcessModuleStatus1(void){
   }
 
   //find the module index
-  moduleIndex = pack.moduleCount;
+  moduleIndex = MAX_MODULES_PER_PACK;
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
     }
-  if (moduleIndex == pack.moduleCount){
+  if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus1()"); serialOut(tempBuffer);}
   }else{
@@ -1681,14 +1681,14 @@ void MCU_ProcessModuleStatus2(void){
   }
 
   //find the module index
-  moduleIndex = pack.moduleCount;
+  moduleIndex = MAX_MODULES_PER_PACK;
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
     }
-  if (moduleIndex == pack.moduleCount){
+  if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus2()"); serialOut(tempBuffer);}
   }else{
@@ -1762,14 +1762,14 @@ void MCU_ProcessModuleStatus3(void){
   }
 
   //find the module index
-  moduleIndex = pack.moduleCount;
+  moduleIndex = MAX_MODULES_PER_PACK;
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
     }
-  if (moduleIndex == pack.moduleCount){
+  if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus3()"); serialOut(tempBuffer);}
   }else{
@@ -1997,13 +1997,20 @@ void MCU_ProcessCellDetail(void){
   if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU RX 0x505 Cell Detail: ID=%02x, CNT=%02x, CELL=%02x, SOC=%02x, TEMP=%03x, Voltage=%03x",rxObj.bF.id.EID, cellDetail.cellCount, cellDetail.cellId, cellDetail.cellSoc, cellDetail.cellTemp, cellDetail.cellVoltage); serialOut(tempBuffer);}
 
   //check whether the module is already registered and perhaps lost its registration
-  moduleIndex = pack.moduleCount; //default the index to the next entry (we are using 0 so next index is the moduleCount)
+  moduleIndex = MAX_MODULES_PER_PACK; //default the index to the next entry (we are using 0 so next index is the moduleCount)
   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
     if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(cellDetail.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // module is already registered, save the index
   }
+  
+  if (moduleIndex == MAX_MODULES_PER_PACK){
+    // Unregistered module
+    if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessCellDetail()"); serialOut(tempBuffer);}
+    return;
+  }
+  
   // store the details
   module[moduleIndex].cellCount = cellDetail.cellCount;
   module[moduleIndex].cell[cellDetail.cellId].soc = cellDetail.cellSoc;

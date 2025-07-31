@@ -23,10 +23,10 @@
 ../Core/Src/mcu.c:1901:6:MCU_TransmitState	40	static
 ../Core/Src/mcu.c:1944:6:MCU_TransmitMaxState	24	static
 ../Core/Src/mcu.c:1987:6:MCU_ProcessCellDetail	56	static
-../Core/Src/mcu.c:2045:9:MCU_ModuleIndexFromId	24	static
-../Core/Src/mcu.c:2064:6:MCU_UpdateModuleCounts	16	static
-../Core/Src/mcu.c:2085:10:MCU_TicksSinceLastMessage	40	static
-../Core/Src/mcu.c:2114:10:MCU_TicksSinceLastStateTx	40	static
-../Core/Src/mcu.c:2143:10:MCU_ElapsedTicks	32	static
-../Core/Src/mcu.c:2165:6:CAN_TestRegisterAccess	24	static,ignoring_inline_asm
-../Core/Src/mcu.c:2210:6:CAN_TestRamAccess	24	static,ignoring_inline_asm
+../Core/Src/mcu.c:2052:9:MCU_ModuleIndexFromId	24	static
+../Core/Src/mcu.c:2071:6:MCU_UpdateModuleCounts	16	static
+../Core/Src/mcu.c:2092:10:MCU_TicksSinceLastMessage	40	static
+../Core/Src/mcu.c:2121:10:MCU_TicksSinceLastStateTx	40	static
+../Core/Src/mcu.c:2150:10:MCU_ElapsedTicks	32	static
+../Core/Src/mcu.c:2172:6:CAN_TestRegisterAccess	24	static,ignoring_inline_asm
+../Core/Src/mcu.c:2217:6:CAN_TestRamAccess	24	static,ignoring_inline_asm
