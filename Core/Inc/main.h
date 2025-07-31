@@ -219,6 +219,7 @@ void Error_Handler(void);
 #define DBG_MSG_DEREGISTER_ALL    0x00040000  // 0x51E TX
 #define DBG_MSG_POLLING           0x00080000  // Round-robin polling
 #define DBG_MSG_TIMEOUT           0x00100000  // Timeout events
+#define DBG_MSG_MINIMAL           0x00200000  // Minimal status pulse output
 #define DBG_MSG_ALL               0xFFFFFFFF
 
 // Useful debug message groups
@@ -228,7 +229,7 @@ void Error_Handler(void);
 
 // Debug configuration
 #define DEBUG_LEVEL     (DBG_ERRORS)
-#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_STATUS_REQ | DBG_MSG_STATUS1 | DBG_MSG_STATUS2 | DBG_MSG_STATUS3 | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT)  // Show registration, status requests, status responses and deregistration messages
+#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL)  // Show registration, deregistration, timeout and minimal status
 
 #define VALIDATE_HARDWARE 1 // checks for maximum charge/discharge in range - put module in fault if invalid
 

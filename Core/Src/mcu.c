@@ -61,6 +61,7 @@ batteryPack pack;
 uint32_t MCU_TicksSinceLastMessage(uint8_t moduleId);
 uint32_t MCU_TicksSinceLastStateTx(uint8_t moduleId);
 uint32_t MCU_ElapsedTicks(lastContact* pLastContact);
+void MCU_UpdateModuleCounts(void);
 void MCU_TransmitState(uint8_t moduleId, moduleState state);
 uint8_t MCU_FindMaxVoltageModule(void);
 void MCU_UpdateStats(void);
@@ -324,7 +325,8 @@ void PCU_Tasks(void)
       sprintf(tempBuffer,"MCU DEBUG - Checking %d modules", pack.moduleCount); 
       serialOut(tempBuffer);
     }*/
-    for (index =0;index < pack.moduleCount;index++){
+    for (index =0;index < MAX_MODULES_PER_PACK;index++){
+      if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
       elapsedTicks = MCU_TicksSinceLastMessage(module[index].moduleId);
       /*if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
         sprintf(tempBuffer,"MCU DEBUG - module[%d] ID=%02x elapsed=%lu pending=%d", 
@@ -354,16 +356,13 @@ void PCU_Tasks(void)
             serialOut(tempBuffer);
           }
           
-          // Remove module from pack
-          // Shift remaining modules down
-          for(int j = index; j < pack.moduleCount - 1; j++){
-            module[j] = module[j + 1];
-          }
-          pack.moduleCount--;
+          // Mark module as deregistered (don't remove from array)
+          module[index].isRegistered = false;
           
-          // Adjust index since we removed a module
-          index--;  // Always decrement to recheck this index
-          continue;  // Skip to next iteration
+          // Update module counts
+          MCU_UpdateModuleCounts();
+          
+          // Continue without adjusting index (no array shift)
         }
         else if( module[index].faultCode.commsError == false){
           // First timeout or still under limit - isolate module
@@ -454,7 +453,8 @@ void PCU_Tasks(void)
   if (pack.controlMode == dmcMode){
    // DIRECT MODULE CONTROL MODE
    // Command the modules
-    for (index =0;index < pack.moduleCount;index++){
+    for (index =0;index < MAX_MODULES_PER_PACK;index++){
+      if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
       // Handle the  over current condition
       if(module[index].faultCode.overCurrent == true){
         if (module[index].currentState != moduleOff){
@@ -529,7 +529,7 @@ void PCU_Tasks(void)
       if(pack.powerStatus.powerStage == stagePowerOnModule){
         // first check the the module is not already on - we need to find the index
         firstModuleIndex = MCU_ModuleIndexFromId(pack.powerStatus.firstModuleId);
-        if (firstModuleIndex != pack.moduleCount){
+        if (firstModuleIndex < MAX_MODULES_PER_PACK){
           // check that our first module hasnt gone into fault
           if(module[firstModuleIndex].faultCode.commsError == true || module[firstModuleIndex].faultCode.hwIncompatible == true){
              // module has gone into fault or hw incompatible -  go back a stage and select another
@@ -563,7 +563,8 @@ void PCU_Tasks(void)
       }
     }
     // Command the rest of the modules
-    for (index =0;index < pack.moduleCount;index++){
+    for (index =0;index < MAX_MODULES_PER_PACK;index++){
+      if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
       // Handle the  over current condition
       if(module[index].faultCode.overCurrent == true){
         if (pack.vcuRequestedState != packOff){
@@ -758,7 +759,8 @@ void MCU_UpdateStats(void)
   uint8_t  modHighestCellTemp  = 0;
 
 
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     // only generate stats for modules that are not in fault or in over current
     if(module[index].faultCode.commsError == false && module[index].faultCode.overCurrent ==  false && module[index].faultCode.hwIncompatible == false){
       // sum the currents of all modules that are ON and average the voltages
@@ -1036,42 +1038,69 @@ void MCU_RegisterModule(void){
     serialOut(tempBuffer);
   }
 
-  //check whether the module is already registered and perhaps lost its registration
-  moduleIndex = pack.moduleCount; //default the index to the next entry (we are using 0 so next index is the moduleCount)
-  for(index = 0; index < pack.moduleCount; index++){
-    if((announcement.moduleMfgId == module[index].mfgId) && (announcement.modulePartId == module[index].partId)&&(announcement.moduleUniqueId == module[index].uniqueId)){
-      moduleIndex = index; // module is already registered, save the index
+  // Check if module already exists (registered or not)
+  moduleIndex = MAX_MODULES_PER_PACK; // Invalid index
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(module[index].uniqueId == announcement.moduleUniqueId){
+      moduleIndex = index;
+      break;
+    }
+  }
 
-      // Clear any previous module fault condition and update last contact details
-      module[moduleIndex].faultCode.commsError  = 0;
-      module[moduleIndex].lastContact.ticks     = htim1.Instance->CNT;
+  if(moduleIndex < MAX_MODULES_PER_PACK){
+    // Existing module - just mark as registered
+    module[moduleIndex].isRegistered = true;
+    module[moduleIndex].faultCode.commsError = 0;
+    module[moduleIndex].lastContact.ticks = htim1.Instance->CNT;
+    module[moduleIndex].lastContact.overflows = etTimerOverflows;
+    module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
+    module[moduleIndex].statusMessagesReceived = 0;  // Reset status tracking
+    
+    if(debugMessages & DBG_MSG_ANNOUNCE){
+      sprintf(tempBuffer,"MCU INFO - Module RE-REGISTERED: Index=%d, ID=%02x, UID=%08x",
+              moduleIndex, module[moduleIndex].moduleId, (int)announcement.moduleUniqueId);
+      serialOut(tempBuffer);
+    }
+  }
+  else {
+    // New module - find first empty slot
+    for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+      if(module[index].uniqueId == 0){  // Empty slot
+        moduleIndex = index;
+        break;
+      }
+    }
+    
+    if(moduleIndex < MAX_MODULES_PER_PACK){
+      // Initialize new module
+      module[moduleIndex].moduleId = moduleIndex + 1;  // ID = index + 1
+      module[moduleIndex].uniqueId = announcement.moduleUniqueId;
+      module[moduleIndex].isRegistered = true;
+      module[moduleIndex].fwVersion = announcement.moduleFw;
+      module[moduleIndex].partId = announcement.modulePartId;
+      module[moduleIndex].mfgId = announcement.moduleMfgId;
+      module[moduleIndex].lastContact.ticks = htim1.Instance->CNT;
       module[moduleIndex].lastContact.overflows = etTimerOverflows;
-      module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
-      module[moduleIndex].statusMessagesReceived = 0;  // Reset status tracking
+      module[moduleIndex].statusPending = true;
+      module[moduleIndex].consecutiveTimeouts = 0;  // Initialize timeout counter for new module
+      module[moduleIndex].statusMessagesReceived = 0;  // Initialize status tracking
+      
+      // Update module counts
+      MCU_UpdateModuleCounts();
+      
       if(debugMessages & DBG_MSG_ANNOUNCE){
-        sprintf(tempBuffer,"MCU WARNING - Module RE-REGISTERED (was deregistered?): ID=%02x, UID=%08x",
-                module[moduleIndex].moduleId, (int)announcement.moduleUniqueId); 
+        sprintf(tempBuffer,"MCU INFO - New module registered: Index=%d, ID=%02x, Total=%d, Active=%d", 
+                moduleIndex, module[moduleIndex].moduleId, pack.totalModules, pack.activeModules);
         serialOut(tempBuffer);
       }
     }
-  }
-  if (moduleIndex == pack.moduleCount){ // not previously registered, so add the new module details
-    module[moduleIndex].fwVersion             = announcement.moduleFw;
-    module[moduleIndex].partId                = announcement.modulePartId;
-    module[moduleIndex].mfgId                 = announcement.moduleMfgId;
-    module[moduleIndex].uniqueId              = announcement.moduleUniqueId;
-    module[moduleIndex].lastContact.ticks     = htim1.Instance->CNT;
-    module[moduleIndex].lastContact.overflows = etTimerOverflows;
-    module[moduleIndex].statusPending       = true;
-    module[moduleIndex].consecutiveTimeouts = 0;  // Initialize timeout counter for new module
-    module[moduleIndex].statusMessagesReceived = 0;  // Initialize status tracking
-
-    //increase moduleCount
-    pack.moduleCount++;
-    module[moduleIndex].moduleId = pack.moduleCount; //first module should have a module id of 1
-    if(debugMessages & DBG_MSG_ANNOUNCE){
-      sprintf(tempBuffer,"MCU INFO - New module registered: Index=%d, ID=%02x, Total modules=%d", moduleIndex, module[moduleIndex].moduleId, pack.moduleCount); 
-      serialOut(tempBuffer);
+    else {
+      // No more slots available
+      if(debugMessages & DBG_MSG_ANNOUNCE){
+        sprintf(tempBuffer,"MCU ERROR - No slots available for module UID=%08x", (int)announcement.moduleUniqueId);
+        serialOut(tempBuffer);
+      }
+      return;
     }
   }
 
@@ -1175,6 +1204,16 @@ void MCU_DeRegisterAllModules(void){
         serialOut(tempBuffer);
     }
     MCU_TransmitMessageQueue(CAN2);                     // Send it
+    
+    // Mark all modules as unregistered locally
+    for(int i = 0; i < MAX_MODULES_PER_PACK; i++){
+        if(module[i].uniqueId != 0){
+            module[i].isRegistered = false;
+        }
+    }
+    
+    // Update module counts
+    MCU_UpdateModuleCounts();
 }
 
 /***************************************************************************************************************
@@ -1287,7 +1326,8 @@ void MCU_RequestHardware(uint8_t moduleId){
 
   //find the module index
   moduleIndex = pack.moduleCount;
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(moduleId == module[index].moduleId)
       moduleIndex = index; // found it - save the index
@@ -1343,7 +1383,8 @@ void MCU_ProcessModuleHardware(void){
 
   //find the module index
   moduleIndex = pack.moduleCount;
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
@@ -1424,7 +1465,8 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
 
   //find the module index
   moduleIndex = pack.moduleCount;
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(moduleId == module[index].moduleId)
       moduleIndex = index; // found it - save the index
@@ -1478,7 +1520,8 @@ uint8_t MCU_FindMaxVoltageModule(void){
   uint8_t  moduleId = pack.moduleCount + 1; // default this to the last + 1
 
   //find the module index of the module with the highest mmv that is not in fault
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     if(module[index].mmv > maxVoltage && module[index].faultCode.commsError == false && module[index].faultCode.overCurrent == false && module[index].faultCode.hwIncompatible == false ){
       maxVoltage = module[index].mmv;
       moduleId = module[index].moduleId;
@@ -1506,21 +1549,31 @@ void MCU_ProcessModuleStatus1(void){
 
   // Debug output when status is received
   if(debugMessages & DBG_MSG_STATUS1){
-    sprintf(tempBuffer,"MCU RX 0x502 Status #1: ID=%02x, State=%01x, Status=%01x, SOC=%d%%, SOH=%d%%, Cells=%d, Volt=%d, Curr=%d", 
-            rxObj.bF.id.EID, 
-            status1.moduleState & 0x0F,           // Lower 4 bits
-            (status1.moduleStatus) & 0x0F,        // Upper 4 bits  
-            status1.moduleSoc,
-            status1.moduleSoh,
-            status1.cellCount,
-            status1.moduleMmv,                     // module measured voltage
-            (int16_t)status1.moduleMmc);           // module measured current
-    serialOut(tempBuffer);
+    if(debugMessages & DBG_MSG_MINIMAL){
+        // Minimal mode - just print module ID without leading zero or newline
+        extern UART_HandleTypeDef huart1;
+        sprintf(tempBuffer,"%x", rxObj.bF.id.EID);
+        HAL_UART_Transmit(&huart1, (uint8_t*)tempBuffer, strlen(tempBuffer), HAL_MAX_DELAY);
+    }
+    else {
+        // Full debug mode
+        sprintf(tempBuffer,"MCU RX 0x502 Status #1: ID=%02x, State=%01x, Status=%01x, SOC=%d%%, SOH=%d%%, Cells=%d, Volt=%d, Curr=%d", 
+                rxObj.bF.id.EID, 
+                status1.moduleState & 0x0F,           // Lower 4 bits
+                (status1.moduleStatus) & 0x0F,        // Upper 4 bits  
+                status1.moduleSoc,
+                status1.moduleSoh,
+                status1.cellCount,
+                status1.moduleMmv,                     // module measured voltage
+                (int16_t)status1.moduleMmc);           // module measured current
+        serialOut(tempBuffer);
+    }
   }
 
   //find the module index
   moduleIndex = pack.moduleCount;
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
     }
@@ -1616,8 +1669,8 @@ void MCU_ProcessModuleStatus2(void){
   memset(&status2,0,sizeof(status2));
   memcpy(&status2, rxd, sizeof(status2));
 
-  // Debug output when status is received
-  if(debugMessages & DBG_MSG_STATUS2){
+  // Debug output when status is received (skip in minimal mode)
+  if(debugMessages & DBG_MSG_STATUS2 && !(debugMessages & DBG_MSG_MINIMAL)){
     sprintf(tempBuffer,"MCU RX 0x503 Status #2: ID=%02x, LoV=%dmV, HiV=%dmV, AvgV=%dmV, TotalV=%dmV", 
             rxObj.bF.id.EID,
             status2.cellLoVolt,
@@ -1629,7 +1682,8 @@ void MCU_ProcessModuleStatus2(void){
 
   //find the module index
   moduleIndex = pack.moduleCount;
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
@@ -1697,8 +1751,8 @@ void MCU_ProcessModuleStatus3(void){
   memset(&status3,0,sizeof(status3));
   memcpy(&status3, rxd, sizeof(status3));
 
-  // Debug output when status is received  
-  if(debugMessages & DBG_MSG_STATUS3){
+  // Debug output when status is received (skip in minimal mode)
+  if(debugMessages & DBG_MSG_STATUS3 && !(debugMessages & DBG_MSG_MINIMAL)){
     sprintf(tempBuffer,"MCU RX 0x504 Status #3: ID=%02x, LoT=%dC, HiT=%dC, AvgT=%dC", 
             rxObj.bF.id.EID,
             status3.cellLoTemp,
@@ -1709,7 +1763,8 @@ void MCU_ProcessModuleStatus3(void){
 
   //find the module index
   moduleIndex = pack.moduleCount;
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(status.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // found it - save the index
@@ -1874,7 +1929,7 @@ void MCU_TransmitState(uint8_t moduleId, moduleState state){
 
   // Update commanded state and command status
   index = MCU_ModuleIndexFromId(moduleId);
-  if(index != pack.moduleCount){
+  if(index < MAX_MODULES_PER_PACK){
     module[index].command.commandedState  = state;
     module[index].command.commandStatus   = commandIssued;
     module[index].lastTransmit.ticks      = htim1.Instance->CNT;
@@ -1917,7 +1972,7 @@ void MCU_TransmitMaxState(moduleState state){
   /*
   // Update commanded state and command status
   index = MCU_ModuleIndexFromId(moduleId);
-  if(index != pack.moduleCount){
+  if(index < MAX_MODULES_PER_PACK){
     module[index].command.commandedState  = state;
     module[index].command.commandStatus   = commandIssued;
     module[index].lastTransmit.ticks      = htim1.Instance->CNT;
@@ -1943,7 +1998,8 @@ void MCU_ProcessCellDetail(void){
 
   //check whether the module is already registered and perhaps lost its registration
   moduleIndex = pack.moduleCount; //default the index to the next entry (we are using 0 so next index is the moduleCount)
-  for(index = 0; index < pack.moduleCount; index++){
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
     //if(cellDetail.moduleId == module[index].moduleId)
     if(rxObj.bF.id.EID == module[index].moduleId)
       moduleIndex = index; // module is already registered, save the index
@@ -1992,14 +2048,34 @@ uint8_t MCU_ModuleIndexFromId(uint8_t moduleId)
    uint8_t index;
 
    //find the module index
-   moduleIndex = pack.moduleCount;
-   for(index = 0; index < pack.moduleCount; index++){
-     if(moduleId == module[index].moduleId)
+   moduleIndex = MAX_MODULES_PER_PACK;
+   for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+     if(moduleId == module[index].moduleId && module[index].isRegistered)
        moduleIndex = index; // found it - save the index
      }
-   if (moduleIndex != pack.moduleCount) return moduleIndex;
-   else return pack.moduleCount; // unregistered module
+   if (moduleIndex != MAX_MODULES_PER_PACK) return moduleIndex;
+   else return MAX_MODULES_PER_PACK; // unregistered module
 
+}
+
+/***************************************************************************************************************
+*     M C U _ U p d a t e M o d u l e C o u n t s                                  P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void MCU_UpdateModuleCounts(void)
+{
+    pack.totalModules = 0;
+    pack.activeModules = 0;
+    pack.moduleCount = 0;  // Keep for compatibility
+    
+    for(int i = 0; i < MAX_MODULES_PER_PACK; i++){
+        if(module[i].uniqueId != 0){
+            pack.totalModules++;
+            if(module[i].isRegistered){
+                pack.activeModules++;
+                pack.moduleCount++;  // Keep for compatibility
+            }
+        }
+    }
 }
 
 
@@ -2017,7 +2093,7 @@ uint32_t MCU_TicksSinceLastMessage(uint8_t moduleId)
   overFlows = etTimerOverflows;
 
   uint8_t moduleIndex = MCU_ModuleIndexFromId(moduleId);
-  if(moduleIndex != pack.moduleCount){
+  if(moduleIndex < MAX_MODULES_PER_PACK){
     if ((overFlows - module[moduleIndex].lastContact.overflows) == 0){
       elapsedTicks = timerCNT - module[moduleIndex].lastContact.ticks;
     } else {
@@ -2046,7 +2122,7 @@ uint32_t MCU_TicksSinceLastStateTx(uint8_t moduleId)
   overFlows = etTimerOverflows;
 
   uint8_t moduleIndex = MCU_ModuleIndexFromId(moduleId);
-  if(moduleIndex != pack.moduleCount){
+  if(moduleIndex < MAX_MODULES_PER_PACK){
     if ((overFlows - module[moduleIndex].lastTransmit.overflows) ==0){
       elapsedTicks = timerCNT - module[moduleIndex].lastTransmit.ticks;
     } else {

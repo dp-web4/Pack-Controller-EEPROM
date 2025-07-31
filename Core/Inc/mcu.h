@@ -167,6 +167,7 @@ void MCU_TransmitSwitchState(void);
 
 extern uint8_t MCU_FindMaxVoltageModule(void);
 extern uint8_t MCU_ModuleIndexFromId(uint8_t moduleId);
+extern void MCU_UpdateModuleCounts(void);
 //extern void MCU_TransmitState(uint8_t moduleId, moduleState state);
 
 //extern batteryModule module[MAX_MODULES_PER_PACK];

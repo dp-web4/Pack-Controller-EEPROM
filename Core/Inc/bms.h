@@ -136,6 +136,7 @@ typedef struct {
   faultCode   faultCode;
   uint8_t     consecutiveTimeouts;
   uint8_t     statusMessagesReceived;  // Bitmask: bit0=Status1, bit1=Status2, bit2=Status3
+  bool        isRegistered;            // Module currently registered (vs just known)
 }batteryModule;
 
 
@@ -149,11 +150,12 @@ typedef struct {
   uint16_t    vcuCanOffset;
   uint16_t    voltage;
   uint32_t    current;
-  uint8_t     moduleCount;
+  uint8_t     moduleCount;        // Can be deprecated - kept for compatibility
   uint8_t     cellBalanceActive;
   uint8_t     cellBalanceStatus;
-  uint8_t     activeModules;
+  uint8_t     activeModules;      // Will be repurposed for currently registered count
   uint8_t     faultedModules;
+  uint8_t     totalModules;       // Count of all modules ever seen (non-empty slots)
   powerStatus powerStatus;
   uint16_t    totalCells;
   uint16_t    cellHiTemp;     // highest temperature
