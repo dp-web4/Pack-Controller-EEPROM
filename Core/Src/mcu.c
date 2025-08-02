@@ -1055,6 +1055,11 @@ void MCU_RegisterModule(void){
     module[moduleIndex].lastContact.overflows = etTimerOverflows;
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
     module[moduleIndex].statusMessagesReceived = 0;  // Reset status tracking
+    module[moduleIndex].statusPending = true;  // Re-enable status polling
+    module[moduleIndex].hardwarePending = true;  // Re-request hardware info
+    
+    // Update module counts
+    MCU_UpdateModuleCounts();
     
     if(debugMessages & DBG_MSG_ANNOUNCE){
       sprintf(tempBuffer,"MCU INFO - Module RE-REGISTERED: Index=%d, ID=%02x, UID=%08x",
@@ -1103,11 +1108,6 @@ void MCU_RegisterModule(void){
       return;
     }
   }
-
-  // hardware ok - register the module
-  // set flags for status and hardware pending
-  module[moduleIndex].statusPending = true;
-  module[moduleIndex].hardwarePending = true;
 
   // send the details back to the module
   registration.moduleId       = module[moduleIndex].moduleId;
