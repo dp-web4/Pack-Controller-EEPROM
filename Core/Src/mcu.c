@@ -940,6 +940,14 @@ void MCU_ReceiveMessages(void)
         serialOut(tempBuffer);
     }
 
+    // Reset timeout for ANY message from a module (using EID as module ID)
+    if(rxObj.bF.id.EID > 0 && rxObj.bF.id.EID <= MAX_MODULES_PER_PACK){
+        uint8_t moduleIndex = MCU_ModuleIndexFromId(rxObj.bF.id.EID);
+        if(moduleIndex < MAX_MODULES_PER_PACK){
+            MCU_UpdateModuleContact(moduleIndex);
+        }
+    }
+
     switch (rxObj.bF.id.SID) {
       case ID_MODULE_ANNOUNCEMENT:
         // Announcement from module - register it
@@ -1136,6 +1144,9 @@ void MCU_RegisterModule(void){
     serialOut(tempBuffer);
   }
   MCU_TransmitMessageQueue(CAN2);                     // Send it
+  
+  // Reset timeouts for all modules during registration (to account for polling delays)
+  MCU_ResetAllModuleTimeouts();
   
   // Request initial status from newly registered module
   MCU_RequestModuleStatus(module[moduleIndex].moduleId);
@@ -1503,6 +1514,9 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
       serialOut(tempBuffer);
     }
     MCU_TransmitMessageQueue(CAN2);                    // Send it
+    
+    // Reset timeout when we request status from a module
+    MCU_UpdateModuleContact(moduleIndex);
   }
 }
 
@@ -1934,6 +1948,8 @@ void MCU_TransmitState(uint8_t moduleId, moduleState state){
     module[index].command.commandStatus   = commandIssued;
     module[index].lastTransmit.ticks      = htim1.Instance->CNT;
     module[index].lastTransmit.overflows  = etTimerOverflows;
+    // Reset timeout when we transmit TO a module
+    MCU_UpdateModuleContact(index);
   }
 }
 
@@ -1977,6 +1993,8 @@ void MCU_TransmitMaxState(moduleState state){
     module[index].command.commandStatus   = commandIssued;
     module[index].lastTransmit.ticks      = htim1.Instance->CNT;
     module[index].lastTransmit.overflows  = etTimerOverflows;
+    // Reset timeout when we transmit TO a module
+    MCU_UpdateModuleContact(index);
   }
   */
 }
@@ -2044,6 +2062,32 @@ void MCU_ProcessCellDetail(void){
     if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x515 Request detail: ID=%02x, CELL=%02x",rxObj.bF.id.EID,detailRequest.cellId ); serialOut(tempBuffer);}
     MCU_TransmitMessageQueue(CAN2);                     // Send it
   }
+}
+
+/***************************************************************************************************************
+*     M C U _ U p d a t e M o d u l e C o n t a c t                              P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void MCU_UpdateModuleContact(uint8_t moduleIndex)
+{
+    if(moduleIndex < MAX_MODULES_PER_PACK && module[moduleIndex].isRegistered){
+        module[moduleIndex].lastContact.ticks = htim1.Instance->CNT;
+        module[moduleIndex].lastContact.overflows = etTimerOverflows;
+        module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on any contact
+    }
+}
+
+/***************************************************************************************************************
+*     M C U _ R e s e t A l l M o d u l e T i m e o u t s                        P A C K   C O N T R O L L E R
+***************************************************************************************************************/
+void MCU_ResetAllModuleTimeouts(void)
+{
+    for(int i = 0; i < MAX_MODULES_PER_PACK; i++){
+        if(module[i].isRegistered && module[i].uniqueId != 0){
+            module[i].lastContact.ticks = htim1.Instance->CNT;
+            module[i].lastContact.overflows = etTimerOverflows;
+            // Don't reset consecutiveTimeouts here - only on actual contact
+        }
+    }
 }
 
 /***************************************************************************************************************
