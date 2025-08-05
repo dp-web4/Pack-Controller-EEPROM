@@ -64,8 +64,24 @@
 #define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL)
 
 /***************************************************************************************************************
+ * Type Definitions
+ ***************************************************************************************************************/
+typedef struct {
+    uint16_t messageId;        // CAN message ID or special message type
+    uint8_t  requiredLevel;    // Required debug level (DBG_COMMS, DBG_ERRORS, etc)
+    uint32_t requiredFlag;     // Required message flag (DBG_MSG_STATUS1, etc)
+    const char* fullFormat;    // Full message format string (NULL if none)
+    const char* minFormat;     // Minimal format string (NULL if none)
+} DebugMessageDef;
+
+// Special message IDs for non-CAN messages
+#define MSG_TIMEOUT_WARNING    0xF001
+#define MSG_DEREGISTER        0xF002
+#define MSG_MODULE_TIMEOUT    0xF003
+
+/***************************************************************************************************************
  * Function Prototypes
  ***************************************************************************************************************/
-void ShowDebugMessage(uint16_t messageId);
+void ShowDebugMessage(uint16_t messageId, ...);
 
 #endif /* DEBUG_H_ */
