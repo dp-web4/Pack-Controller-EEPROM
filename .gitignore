@@ -3,3 +3,6 @@
 *.o
 *.cyclo
 sync.ffs_db
+*.su
+*.cyclo
+*.d
