@@ -7,9 +7,10 @@
 #include <string.h>
 #include <stdbool.h>
 #include "main.h"
+#include "can_id_module.h"  // Include BEFORE debug.h to get CAN message IDs
+#include "can_frm_mod.h"    // Include for CAN frame structures
 #include "debug.h"
 #include "mcu.h"
-#include "can_id_module.h"
 
 // Debug message definitions table
 static const DebugMessageDef debugMessageDefs[] = {
@@ -49,20 +50,20 @@ static const DebugMessageDef debugMessageDefs[] = {
     {ID_MODULE_HARDWARE_REQUEST, DBG_COMMS, DBG_MSG_HARDWARE_REQ,
      "MCU TX 0x511 Hardware Request: ID=%02x", NULL},
      
-    {ID_MODULE_ISOLATE_ALL, DBG_COMMS, DBG_MSG_ISOLATE_ALL,
+    {ID_MODULE_ALL_ISOLATE, DBG_COMMS, DBG_MSG_ISOLATE_ALL,
      "MCU TX 0x51F Isolate All Modules", NULL},
      
-    {ID_MODULE_DEREGISTER_ALL, DBG_COMMS, DBG_MSG_DEREGISTER_ALL,
+    {ID_MODULE_ALL_DEREGISTER, DBG_COMMS, DBG_MSG_DEREGISTER_ALL,
      "MCU TX 0x51E De-Register All Modules", NULL},
      
     {ID_MODULE_TIME_REQUEST, DBG_COMMS, DBG_MSG_TIME_REQ,
      "MCU RX 0x506 Time Request from Module ID=%02x", NULL},
      
     {ID_MODULE_SET_TIME, DBG_COMMS, DBG_MSG_SET_TIME,
-     "MCU TX 0x516 Set Time: %04d-%02d-%02d %02d:%02d:%02d", NULL},
+     "MCU TX 0x516 Set Time", NULL},  // Simplified
      
-    {ID_MODULE_CELL_DETAIL, DBG_COMMS, DBG_MSG_CELL_DETAIL,
-     "MCU RX 0x505 Cell Detail: ID=%02x, Cell=%d, V=%dmV", NULL},
+    {ID_MODULE_DETAIL, DBG_COMMS, DBG_MSG_CELL_DETAIL,
+     "MCU RX 0x505 Module Detail: ID=%02x", NULL},  // Simplified
      
     // Timeout/Error Messages (special IDs)
     {MSG_TIMEOUT_WARNING, DBG_ERRORS, DBG_MSG_TIMEOUT,
@@ -78,15 +79,15 @@ static const DebugMessageDef debugMessageDefs[] = {
     {MSG_UNKNOWN_CAN_ID, DBG_ERRORS, DBG_MSG_CAN_ERRORS,
      "MCU ERROR - Unknown CAN ID: 0x%03x", NULL},
      
-    {MSG_TX_FIFO_ERROR, DBG_ERRORS, DBG_MSG_CAN_ERRORS,
+    {MSG_TX_FIFO_ERROR, DBG_ERRORS, DBG_MSG_TX_FIFO_ERROR,
      "MCU ERROR - TX FIFO error on CAN%d, TEC=%d, REC=%d, Flags=0x%08x", NULL},
      
     // Registration events  
     {MSG_MODULE_REREGISTER, DBG_MCU, DBG_MSG_REG_EVENTS,
-     "MCU INFO - Module re-registered: ID=%02x, UID=%08x", NULL},
+     "MCU INFO - Module re-registered: ID=%02x", NULL},  // Simplified
      
     {MSG_NEW_MODULE_REG, DBG_MCU, DBG_MSG_REG_EVENTS,
-     "MCU INFO - New module registered: ID=%02x, UID=%08x, Index=%d", NULL},
+     "MCU INFO - New module registered: ID=%02x", NULL},  // Simplified
      
     {MSG_UNREGISTERED_MOD, DBG_ERRORS, DBG_MSG_REG_EVENTS,
      "MCU ERROR - Status from unregistered module: ID=%02x", NULL},
@@ -95,7 +96,7 @@ static const DebugMessageDef debugMessageDefs[] = {
      "MCU INFO - Module ID=%02x timeout counter reset (was %d)", NULL},
      
     {MSG_CELL_DETAIL_REQ, DBG_COMMS, DBG_MSG_CELL_DETAIL_REQ,
-     "MCU TX 0x515 Cell Detail Request: ID=%02x, Cell=%d", NULL},
+     "MCU TX 0x515 Module Detail Request: ID=%02x", NULL},  // Simplified
      
     // End marker
     {0, 0, 0, NULL, NULL}

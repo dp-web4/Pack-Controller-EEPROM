@@ -504,8 +504,8 @@ void PCU_Tasks(void)
       if(pack.powerStatus.powerStage == stageSelectModule){
         // Select module with highest voltage
         moduleId = MCU_FindMaxVoltageModule();
-        if(moduleId > 0 && moduleId <= pack.numberOfActiveModules) {
-          ShowDebugMessage(MSG_VOLTAGE_SELECTION, moduleId, module[moduleId-1].status1.voltage);
+        if(moduleId > 0 && moduleId <= pack.activeModules) {
+          ShowDebugMessage(MSG_VOLTAGE_SELECTION, moduleId, module[moduleId-1].mmv);
         }
         if (moduleId == 0){
           // All modules report 0V!
@@ -976,7 +976,7 @@ void MCU_ReceiveMessages(void)
         break;
       default:
         // Unknown Message
-        ShowDebugMessage(MSG_UNKNOWN_CAN_ID, rxHeader.Identifier);
+        ShowDebugMessage(MSG_UNKNOWN_CAN_ID, rxObj.bF.id.SID);
         break;
     }
 
@@ -1055,7 +1055,7 @@ void MCU_RegisterModule(void){
     // Update module counts
     MCU_UpdateModuleCounts();
     
-    ShowDebugMessage(MSG_MODULE_REREGISTER, moduleId, announcement.serialNumber);
+    ShowDebugMessage(MSG_MODULE_REREGISTER, module[moduleIndex].moduleId);
   }
   else {
     // New module - find first empty slot
@@ -1083,7 +1083,7 @@ void MCU_RegisterModule(void){
       // Update module counts
       MCU_UpdateModuleCounts();
       
-      ShowDebugMessage(MSG_NEW_MODULE_REG, moduleId, announcement.serialNumber, pack.numberOfActiveModules-1);
+      ShowDebugMessage(MSG_NEW_MODULE_REG, module[moduleIndex].moduleId);
     }
     else {
       // No more slots available
@@ -1182,7 +1182,7 @@ void MCU_DeRegisterAllModules(void){
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    ShowDebugMessage(ID_MODULE_DEREGISTER_ALL);
+    ShowDebugMessage(ID_MODULE_ALL_DEREGISTER);
     MCU_TransmitMessageQueue(CAN2);                     // Send it
     
     // Mark all modules as unregistered locally
@@ -1222,7 +1222,7 @@ void MCU_IsolateAllModules(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  ShowDebugMessage(ID_MODULE_ISOLATE_ALL);
+  ShowDebugMessage(ID_MODULE_ALL_ISOLATE);
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1263,7 +1263,7 @@ void MCU_ProcessModuleTime(void){
   time_t packTime;
   CANFRM_MODULE_TIME moduleTime;
 
-  ShowDebugMessage(ID_MODULE_TIME_REQUEST, moduleId);
+  ShowDebugMessage(ID_MODULE_TIME_REQUEST, rxd[0] & 0x1F);  // Module ID from first byte
 
   // read the RTC as time_t
   packTime = readRTC();
@@ -1287,9 +1287,7 @@ void MCU_ProcessModuleTime(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  ShowDebugMessage(ID_MODULE_SET_TIME, 
-      moduleTime.year, moduleTime.month, moduleTime.day,
-      moduleTime.hour, moduleTime.minute, moduleTime.second);
+  ShowDebugMessage(ID_MODULE_SET_TIME);  // Simplified - just log that time was set
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1546,7 +1544,7 @@ void MCU_ProcessModuleStatus1(void){
     }
   if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
-    ShowDebugMessage(MSG_UNREGISTERED_MOD, moduleId);
+    ShowDebugMessage(MSG_UNREGISTERED_MOD, rxObj.bF.id.EID);  // Use EID for module ID
   }else{
     // Track which status message was received
     module[moduleIndex].statusMessagesReceived |= (1 << 0);  // Status1 received
@@ -1559,7 +1557,7 @@ void MCU_ProcessModuleStatus1(void){
     
     // Log timeout counter reset if it was non-zero
     if(module[moduleIndex].consecutiveTimeouts > 0) {
-      ShowDebugMessage(MSG_TIMEOUT_RESET, moduleId, module[moduleIndex].consecutiveTimeouts);
+      ShowDebugMessage(MSG_TIMEOUT_RESET, module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
     }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
@@ -1666,7 +1664,7 @@ void MCU_ProcessModuleStatus2(void){
     
     // Log timeout counter reset if it was non-zero
     if(module[moduleIndex].consecutiveTimeouts > 0) {
-      ShowDebugMessage(MSG_TIMEOUT_RESET, moduleId, module[moduleIndex].consecutiveTimeouts);
+      ShowDebugMessage(MSG_TIMEOUT_RESET, module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
     }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
@@ -1743,7 +1741,7 @@ void MCU_ProcessModuleStatus3(void){
     
     // Log timeout counter reset if it was non-zero
     if(module[moduleIndex].consecutiveTimeouts > 0) {
-      ShowDebugMessage(MSG_TIMEOUT_RESET, moduleId, module[moduleIndex].consecutiveTimeouts);
+      ShowDebugMessage(MSG_TIMEOUT_RESET, module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
     }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
@@ -1844,7 +1842,7 @@ void MCU_RequestCellDetail(uint8_t moduleId){
   txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-  ShowDebugMessage(MSG_CELL_DETAIL_REQ, moduleId, cellId);
+  ShowDebugMessage(MSG_CELL_DETAIL_REQ, moduleId);  // Simplified
 
   MCU_TransmitMessageQueue(CAN2);                    // Send it
 }
@@ -1953,8 +1951,7 @@ void MCU_ProcessCellDetail(void){
 
   // copy data to announcement structure
   memcpy(&cellDetail, rxd,sizeof(cellDetail));
-  ShowDebugMessage(ID_MODULE_CELL_DETAIL, moduleId, 
-      cellDetail.cellNumber, cellDetail.voltage);
+  ShowDebugMessage(ID_MODULE_DETAIL, rxd[0] & 0x1F);  // Simplified - just log module ID
 
   //check whether the module is already registered and perhaps lost its registration
   moduleIndex = MAX_MODULES_PER_PACK; //default the index to the next entry (we are using 0 so next index is the moduleCount)

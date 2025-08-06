@@ -50,9 +50,10 @@
 #define DBG_MSG_TIMEOUT           0x00100000  // Timeout events
 #define DBG_MSG_MINIMAL           0x00200000  // Minimal status pulse output
 #define DBG_MSG_VOLTAGE_SEL       0x00400000  // Voltage selection messages
-#define DBG_MSG_CAN_ERRORS        0x00800000  // CAN error messages  
+#define DBG_MSG_CAN_ERRORS        0x00800000  // CAN error messages (unknown IDs, etc)
 #define DBG_MSG_REG_EVENTS        0x01000000  // Registration events
 #define DBG_MSG_CELL_DETAIL_REQ   0x02000000  // Cell detail request
+#define DBG_MSG_TX_FIFO_ERROR     0x04000000  // TX FIFO error messages (separate flag)
 #define DBG_MSG_ALL               0xFFFFFFFF
 
 // Message groups for convenience
