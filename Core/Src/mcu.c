@@ -350,11 +350,7 @@ void PCU_Tasks(void)
           MCU_DeRegisterModule(module[index].moduleId);
           
           // Log removal from pack
-          if(debugMessages & DBG_MSG_DEREGISTER){
-            sprintf(tempBuffer,"MCU INFO - Removing module from pack: ID=%02x, UID=%08x, Index=%d", 
-                    module[index].moduleId, (int)module[index].uniqueId, index);
-            serialOut(tempBuffer);
-          }
+          ShowDebugMessage(MSG_DEREGISTER, module[index].moduleId, module[index].uniqueId, index);
           
           // Mark module as deregistered (don't remove from array)
           module[index].isRegistered = false;
@@ -506,7 +502,7 @@ void PCU_Tasks(void)
       // check for requirement to select and power up the first module
       if(pack.powerStatus.powerStage == stageSelectModule){
         // Select module with highest voltage
-        if((debugLevel & (DBG_MCU + DBG_VERBOSE)) == (DBG_MCU + DBG_VERBOSE) && ((pack.errorCounts.firstModule % 5000) == 0)){ sprintf(tempBuffer,"MCU INFO - Selecting module with highest voltage"); serialOut(tempBuffer);}
+        // TODO: Add voltage selection info message to debug system
         moduleId = MCU_FindMaxVoltageModule();
         if (moduleId == 0){
           // All modules report 0V!
@@ -933,12 +929,7 @@ void MCU_ReceiveMessages(void)
     // Get message
     DRV_CANFDSPI_ReceiveMessageGet(CAN2, MCU_RX_FIFO, &rxObj, rxd, MAX_DATA_BYTES);
 
-    // Log RX message based on message-specific debug flags
-    if(MCU_ShouldLogMessage(rxObj.bF.id.SID, false)){
-        sprintf(tempBuffer,"MCU RX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
-                rxObj.bF.id.SID,rxObj.bF.id.EID,rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]); 
-        serialOut(tempBuffer);
-    }
+    // Raw CAN message logging disabled - use specific message handlers
 
     // Reset timeout for ANY message from a module (using EID as module ID)
     if(rxObj.bF.id.EID > 0 && rxObj.bF.id.EID <= MAX_MODULES_PER_PACK){
@@ -982,7 +973,7 @@ void MCU_ReceiveMessages(void)
         break;
       default:
         // Unknown Message
-         if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU RX UNKNOWN ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",rxObj.bF.id.SID,rxObj.bF.id.EID,rxd[0],rxd[1],rxd[2],rxd[3],rxd[4],rxd[5],rxd[6],rxd[7]); serialOut(tempBuffer);}
+        // TODO: Add unknown message ID error to debug system
         break;
     }
 
@@ -1005,7 +996,7 @@ void MCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index)
         Nop();
         Nop();
         DRV_CANFDSPI_ErrorCountStateGet(index, &tec, &rec, &errorFlags);
-        if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU TX ERROR - FIFO Full! Check CAN Connection."); serialOut(tempBuffer);}
+        // TODO: Add TX FIFO error message to debug system
 
         //Flush channel
         DRV_CANFDSPI_TransmitChannelFlush(index, MCU_TX_FIFO);
@@ -1019,12 +1010,7 @@ void MCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index)
     // Load message and transmit
     uint8_t n = DRV_CANFDSPI_DlcToDataBytes(txObj.bF.ctrl.DLC);
     
-    // Log TX message based on message-specific debug flags
-    if(MCU_ShouldLogMessage(txObj.bF.id.SID, true)){
-        sprintf(tempBuffer,"MCU TX ID=0x%03x : EID=0x%08x : Byte[0..7]=0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x 0x%02x",
-                txObj.bF.id.SID, txObj.bF.id.EID, txd[0], txd[1], txd[2], txd[3], txd[4], txd[5], txd[6], txd[7]);
-        serialOut(tempBuffer);
-    }
+    // Raw CAN message logging disabled - use specific message handlers
 
     DRV_CANFDSPI_TransmitChannelLoad(index, MCU_TX_FIFO, &txObj, txd, n, true);
 }
@@ -1041,10 +1027,7 @@ void MCU_RegisterModule(void){
 
   // copy data to announcement structure
   memcpy(&announcement, rxd,sizeof(announcement));
-  if(debugMessages & DBG_MSG_ANNOUNCE){
-    sprintf(tempBuffer,"MCU RX 0x500 Announcement: FW=%02x, MFG=%02x, PN=%02x, UID=%08x",announcement.moduleFw, announcement.moduleMfgId, announcement.modulePartId,(int)announcement.moduleUniqueId); 
-    serialOut(tempBuffer);
-  }
+  ShowDebugMessage(ID_MODULE_ANNOUNCEMENT, announcement.moduleFw, announcement.moduleMfgId, announcement.modulePartId, announcement.moduleUniqueId);
 
   // Check if module already exists (registered or not)
   moduleIndex = MAX_MODULES_PER_PACK; // Invalid index
@@ -1069,11 +1052,7 @@ void MCU_RegisterModule(void){
     // Update module counts
     MCU_UpdateModuleCounts();
     
-    if(debugMessages & DBG_MSG_ANNOUNCE){
-      sprintf(tempBuffer,"MCU INFO - Module RE-REGISTERED: Index=%d, ID=%02x, UID=%08x",
-              moduleIndex, module[moduleIndex].moduleId, (int)announcement.moduleUniqueId);
-      serialOut(tempBuffer);
-    }
+    // TODO: Add module re-registration info message to debug system
   }
   else {
     // New module - find first empty slot
@@ -1101,11 +1080,7 @@ void MCU_RegisterModule(void){
       // Update module counts
       MCU_UpdateModuleCounts();
       
-      if(debugMessages & DBG_MSG_ANNOUNCE){
-        sprintf(tempBuffer,"MCU INFO - New module registered: Index=%d, ID=%02x, Total=%d, Active=%d", 
-                moduleIndex, module[moduleIndex].moduleId, pack.totalModules, pack.activeModules);
-        serialOut(tempBuffer);
-      }
+      // TODO: Add new module registration info message to debug system
     }
     else {
       // No more slots available
@@ -1139,10 +1114,7 @@ void MCU_RegisterModule(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  if(debugMessages & DBG_MSG_REGISTRATION){
-    sprintf(tempBuffer,"MCU TX 0x510 Registration: ID=%02x, CTL=%02x, MFG=%02x, PN=%02x, UID=%08x",registration.moduleId, registration.controllerId, registration.moduleMfgId, registration.modulePartId,(int)registration.moduleUniqueId); 
-    serialOut(tempBuffer);
-  }
+  ShowDebugMessage(ID_MODULE_REGISTRATION, registration.moduleId, registration.controllerId, registration.moduleMfgId, registration.modulePartId, registration.moduleUniqueId);
   MCU_TransmitMessageQueue(CAN2);                     // Send it
   
   // Reset timeouts for all modules during registration (to account for polling delays)
@@ -1178,10 +1150,7 @@ void MCU_DeRegisterModule(uint8_t moduleId){
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugMessages & DBG_MSG_DEREGISTER){ 
-        sprintf(tempBuffer,"MCU TX 0x518 De-Register module ID=%02x, CTL=%02x", moduleId, pack.id); 
-        serialOut(tempBuffer);
-    }
+    ShowDebugMessage(ID_MODULE_DEREGISTER, moduleId);
     MCU_TransmitMessageQueue(CAN2);                  // Send it
 }
 
@@ -1210,10 +1179,7 @@ void MCU_DeRegisterAllModules(void){
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugMessages & DBG_MSG_DEREGISTER_ALL){ 
-        sprintf(tempBuffer,"MCU TX 0x51E De-Register all modules"); 
-        serialOut(tempBuffer);
-    }
+    // TODO: Add DBG_MSG_DEREGISTER_ALL message to debug table
     MCU_TransmitMessageQueue(CAN2);                     // Send it
     
     // Mark all modules as unregistered locally
@@ -1253,7 +1219,7 @@ void MCU_IsolateAllModules(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x51F Isolate all modules"); serialOut(tempBuffer);}
+  // TODO: Add isolate all message to debug system
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1282,10 +1248,7 @@ void MCU_RequestModuleAnnouncement(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
   
-  if(debugMessages & DBG_MSG_ANNOUNCE_REQ){
-    sprintf(tempBuffer,"MCU TX 0x51D Request module announcements"); 
-    serialOut(tempBuffer);
-  }
+  ShowDebugMessage(ID_MODULE_ANNOUNCE_REQUEST);
   MCU_TransmitMessageQueue(CAN2);                  // Send it
 }
 
@@ -1297,7 +1260,7 @@ void MCU_ProcessModuleTime(void){
   time_t packTime;
   CANFRM_MODULE_TIME moduleTime;
 
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU RX 0x506 Time Request"); serialOut(tempBuffer);}
+  // TODO: Add time request message to debug system
 
   // read the RTC as time_t
   packTime = readRTC();
@@ -1321,7 +1284,7 @@ void MCU_ProcessModuleTime(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x516 Set Time"); serialOut(tempBuffer);}
+  // TODO: Add set time message to debug system
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1369,7 +1332,7 @@ void MCU_RequestHardware(uint8_t moduleId){
     txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x511 Request Hardware : ID=%02x",moduleId); serialOut(tempBuffer);}
+    // TODO: Add hardware request message to debug system
     MCU_TransmitMessageQueue(CAN2);                    // Send it
   }
 }
@@ -1458,8 +1421,7 @@ void MCU_ProcessModuleHardware(void){
       moduleMaxDischargeA = MODULE_CURRENT_BASE + (module[moduleIndex].maxDischargeA * MODULE_CURRENT_FACTOR);
       moduleMaxEndVoltage = MODULE_VOLTAGE_BASE + (module[moduleIndex].maxChargeEndV * MODULE_VOLTAGE_FACTOR);
 
-      sprintf(tempBuffer,"MCU RX 0x501 Hardware: ID=%02x, Max Charge=%.2fA, Max Discharge=%.2fA, Max Charge End Voltage=%.2fA, HW=%d",
-        rxObj.bF.id.EID,moduleMaxChargeA, moduleMaxDischargeA, moduleMaxEndVoltage,module[moduleIndex].hwVersion); serialOut(tempBuffer);
+      ShowDebugMessage(ID_MODULE_HARDWARE, rxObj.bF.id.EID);
     }
   }
 }
@@ -1509,10 +1471,8 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
     txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(MCU_ShouldLogMessage(ID_MODULE_STATUS_REQUEST, true)){ 
-      sprintf(tempBuffer,"MCU TX 0x512 Request Status : ID=%02x",moduleId); 
-      serialOut(tempBuffer);
-    }
+    // Use new debug message system for polling message
+    ShowDebugMessage(ID_MODULE_STATUS_REQUEST, moduleId);
     MCU_TransmitMessageQueue(CAN2);                    // Send it
     
     // Reset timeout when we request status from a module
@@ -1562,27 +1522,15 @@ void MCU_ProcessModuleStatus1(void){
   memcpy(&status1, rxd, sizeof(status1));
 
   // Debug output when status is received
-  if(debugMessages & DBG_MSG_STATUS1){
-    if(debugMessages & DBG_MSG_MINIMAL){
-        // Minimal mode - just print module ID without leading zero or newline
-        extern UART_HandleTypeDef huart1;
-        sprintf(tempBuffer,"%x", rxObj.bF.id.EID);
-        HAL_UART_Transmit(&huart1, (uint8_t*)tempBuffer, strlen(tempBuffer), HAL_MAX_DELAY);
-    }
-    else {
-        // Full debug mode
-        sprintf(tempBuffer,"MCU RX 0x502 Status #1: ID=%02x, State=%01x, Status=%01x, SOC=%d%%, SOH=%d%%, Cells=%d, Volt=%d, Curr=%d", 
-                rxObj.bF.id.EID, 
-                status1.moduleState & 0x0F,           // Lower 4 bits
-                (status1.moduleStatus) & 0x0F,        // Upper 4 bits  
-                status1.moduleSoc,
-                status1.moduleSoh,
-                status1.cellCount,
-                status1.moduleMmv,                     // module measured voltage
-                (int16_t)status1.moduleMmc);           // module measured current
-        serialOut(tempBuffer);
-    }
-  }
+  ShowDebugMessage(ID_MODULE_STATUS_1, 
+                   rxObj.bF.id.EID, 
+                   status1.moduleState & 0x0F,           // Lower 4 bits
+                   (status1.moduleStatus) & 0x0F,        // Upper 4 bits  
+                   status1.moduleSoc,
+                   status1.moduleSoh,
+                   status1.cellCount,
+                   status1.moduleMmv,                     // module measured voltage
+                   (int16_t)status1.moduleMmc);           // module measured current
 
   //find the module index
   moduleIndex = MAX_MODULES_PER_PACK;
@@ -1593,7 +1541,7 @@ void MCU_ProcessModuleStatus1(void){
     }
   if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
-    if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus1()"); serialOut(tempBuffer);}
+    // TODO: Add unregistered module error to debug system
   }else{
     // Track which status message was received
     module[moduleIndex].statusMessagesReceived |= (1 << 0);  // Status1 received
@@ -1605,11 +1553,7 @@ void MCU_ProcessModuleStatus1(void){
     }
     
     // Log timeout counter reset if it was non-zero
-    if(module[moduleIndex].consecutiveTimeouts > 0 && (debugMessages & DBG_MSG_TIMEOUT)){
-      sprintf(tempBuffer,"MCU INFO - Resetting timeout counter for module ID=%02x (was %d)", 
-              module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
-      serialOut(tempBuffer);
-    }
+    // TODO: Add timeout reset message to debug system if needed
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1662,9 +1606,7 @@ void MCU_ProcessModuleStatus1(void){
       stateOfHealth = PERCENTAGE_BASE     + (module[moduleIndex].soh  * PERCENTAGE_FACTOR);
 
 
-      sprintf(tempBuffer,"MCU RX 0x502 Status #1: ID=%02x, State=%s, Status=%s, Cell Count=%d, Voltage=%.2fV, Current=%.2fA, Charge=%.1f%% Health=%.1f%%",
-          rxObj.bF.id.EID, strState, strStatus, module[moduleIndex].cellCount, moduleVoltage, moduleCurrent, stateOfCharge, stateOfHealth);
-      serialOut(tempBuffer);
+      // Verbose status logging now handled by ShowDebugMessage
     }
   }
 }
@@ -1716,11 +1658,7 @@ void MCU_ProcessModuleStatus2(void){
     }
     
     // Log timeout counter reset if it was non-zero
-    if(module[moduleIndex].consecutiveTimeouts > 0 && (debugMessages & DBG_MSG_TIMEOUT)){
-      sprintf(tempBuffer,"MCU INFO - Resetting timeout counter for module ID=%02x (was %d)", 
-              module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
-      serialOut(tempBuffer);
-    }
+    // TODO: Add timeout reset message to debug system if needed
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1745,9 +1683,7 @@ void MCU_ProcessModuleStatus2(void){
       cellLoVolt    = CELL_VOLTAGE_BASE + (module[moduleIndex].cellLoVolt     * CELL_VOLTAGE_FACTOR);
       cellTotalVolt = CELL_VOLTAGE_BASE + (module[moduleIndex].cellTotalVolt  * CELL_TOTAL_VOLTAGE_FACTOR);
 
-      sprintf(tempBuffer,"MCU RX 0x503 Status #2: ID=%02x, Average Cell Voltage=%.2fV, Highest Cell Voltage=%.2fV, Lowest Cell Voltage=%.2fV, Total Cell Voltage=%.2fV",
-          rxObj.bF.id.EID, cellAvgVolt, cellHiVolt,cellLoVolt, cellTotalVolt);
-      serialOut(tempBuffer);
+      // Verbose status logging now handled by ShowDebugMessage
     }
   }
 }
@@ -1797,11 +1733,7 @@ void MCU_ProcessModuleStatus3(void){
     }
     
     // Log timeout counter reset if it was non-zero
-    if(module[moduleIndex].consecutiveTimeouts > 0 && (debugMessages & DBG_MSG_TIMEOUT)){
-      sprintf(tempBuffer,"MCU INFO - Resetting timeout counter for module ID=%02x (was %d)", 
-              module[moduleIndex].moduleId, module[moduleIndex].consecutiveTimeouts);
-      serialOut(tempBuffer);
-    }
+    // TODO: Add timeout reset message to debug system if needed
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1824,9 +1756,7 @@ void MCU_ProcessModuleStatus3(void){
       cellLoTemp  = TEMPERATURE_BASE + (module[moduleIndex].cellLoTemp  * TEMPERATURE_FACTOR);
 
 
-      sprintf(tempBuffer,"MCU RX 0x504 Status #3: ID=%02x, Average Cell Temp=%.2fC, Highest Cell Temp=%.2fC, Lowest Cell Temp=%.2fC",
-          rxObj.bF.id.EID, cellAvgTemp, cellHiTemp,cellLoTemp);
-      serialOut(tempBuffer);
+      // Verbose status logging now handled by ShowDebugMessage
     }
   }
 }
@@ -1903,7 +1833,7 @@ void MCU_RequestCellDetail(uint8_t moduleId){
   txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x513 Request detail: ID=%02x, CELL=%02x",moduleId,detailRequest.cellId ); serialOut(tempBuffer);}
+  // TODO: Add cell detail request message to debug system
 
   MCU_TransmitMessageQueue(CAN2);                    // Send it
 }
@@ -1938,7 +1868,7 @@ void MCU_TransmitState(uint8_t moduleId, moduleState state){
   txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x514 State Change ID=%02x, STATE=%02x HV=%.2fV",moduleId,state, pack.vcuHvBusVoltage * MODULE_VOLTAGE_FACTOR); serialOut(tempBuffer);}
+  ShowDebugMessage(ID_MODULE_STATE_CHANGE, moduleId, state);
   MCU_TransmitMessageQueue(CAN2);                    // Send it
 
   // Update commanded state and command status
@@ -2012,7 +1942,7 @@ void MCU_ProcessCellDetail(void){
 
   // copy data to announcement structure
   memcpy(&cellDetail, rxd,sizeof(cellDetail));
-  if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU RX 0x505 Cell Detail: ID=%02x, CNT=%02x, CELL=%02x, SOC=%02x, TEMP=%03x, Voltage=%03x",rxObj.bF.id.EID, cellDetail.cellCount, cellDetail.cellId, cellDetail.cellSoc, cellDetail.cellTemp, cellDetail.cellVoltage); serialOut(tempBuffer);}
+  // TODO: Add cell detail RX message to debug system
 
   //check whether the module is already registered and perhaps lost its registration
   moduleIndex = MAX_MODULES_PER_PACK; //default the index to the next entry (we are using 0 so next index is the moduleCount)

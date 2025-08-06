@@ -60,8 +60,8 @@
  * Debug Configuration
  * Edit these to control what gets displayed
  ***************************************************************************************************************/
-#define DEBUG_LEVEL     (DBG_ERRORS)
-#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL)
+#define DEBUG_LEVEL     (DBG_ERRORS | DBG_COMMS)
+#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT | DBG_MSG_STATUS_REQ | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL)
 
 /***************************************************************************************************************
  * Type Definitions

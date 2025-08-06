@@ -57,9 +57,68 @@ static const DebugMessageDef debugMessageDefs[] = {
     {0, 0, 0, NULL, NULL}
 };
 
-// Stub implementation - to be completed
+// External variables
+extern uint8_t debugLevel;
+extern uint32_t debugMessages;
+extern UART_HandleTypeDef huart1;
+extern void serialOut(char *message);
+
+// Find message definition by ID
+static const DebugMessageDef* FindDebugMessageDef(uint16_t messageId) {
+    for(int i = 0; debugMessageDefs[i].messageId != 0; i++) {
+        if(debugMessageDefs[i].messageId == messageId) {
+            return &debugMessageDefs[i];
+        }
+    }
+    return NULL;
+}
+
+// Check if message should be shown
+static bool ShouldShowDebugMessage(uint16_t messageId) {
+    const DebugMessageDef* def = FindDebugMessageDef(messageId);
+    if(!def) return false;
+    
+    // Check debug level
+    if((debugLevel & def->requiredLevel) == 0) return false;
+    
+    // Check message flag
+    if((debugMessages & def->requiredFlag) == 0) return false;
+    
+    return true;
+}
+
+// Show debug message with variable arguments
 void ShowDebugMessage(uint16_t messageId, ...) {
-    // TODO: Implement debug message system
-    // For now, this is a stub that does nothing
-    (void)messageId;  // Suppress unused parameter warning
+    if(!ShouldShowDebugMessage(messageId)) return;
+    
+    const DebugMessageDef* def = FindDebugMessageDef(messageId);
+    if(!def) return;
+    
+    // Determine which format to use
+    const char* format = NULL;
+    bool useMinimal = (debugMessages & DBG_MSG_MINIMAL) != 0;
+    
+    if(useMinimal && def->minFormat) {
+        format = def->minFormat;
+    } else if(def->fullFormat) {
+        format = def->fullFormat;
+    } else {
+        return;  // No suitable format
+    }
+    
+    // Format the message
+    char tempBuffer[256];
+    va_list args;
+    va_start(args, messageId);
+    vsnprintf(tempBuffer, sizeof(tempBuffer), format, args);
+    va_end(args);
+    
+    // Output the message
+    if(useMinimal && def->minFormat) {
+        // Minimal mode - no newline, direct UART output
+        HAL_UART_Transmit(&huart1, (uint8_t*)tempBuffer, strlen(tempBuffer), HAL_MAX_DELAY);
+    } else {
+        // Full mode - use serialOut with newline
+        serialOut(tempBuffer);
+    }
 }
