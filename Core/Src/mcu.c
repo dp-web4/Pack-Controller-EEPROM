@@ -17,6 +17,7 @@
 #include "vcu.h"
 #include "time.h"
 #include "eeprom_data.h"
+#include "debug.h"
 
 /***************************************************************************************************************
 *
@@ -502,8 +503,10 @@ void PCU_Tasks(void)
       // check for requirement to select and power up the first module
       if(pack.powerStatus.powerStage == stageSelectModule){
         // Select module with highest voltage
-        // TODO: Add voltage selection info message to debug system
         moduleId = MCU_FindMaxVoltageModule();
+        if(moduleId > 0 && moduleId <= pack.numberOfActiveModules) {
+          ShowDebugMessage(MSG_VOLTAGE_SELECTION, moduleId, module[moduleId-1].status1.voltage);
+        }
         if (moduleId == 0){
           // All modules report 0V!
           if((debugLevel & (DBG_MCU + DBG_ERRORS)) == (DBG_MCU + DBG_ERRORS) && ((pack.errorCounts.firstModule % 5000) == 0) ){ sprintf(tempBuffer,"MCU WARNING - all modules report 0V"); serialOut(tempBuffer);}
@@ -973,7 +976,7 @@ void MCU_ReceiveMessages(void)
         break;
       default:
         // Unknown Message
-        // TODO: Add unknown message ID error to debug system
+        ShowDebugMessage(MSG_UNKNOWN_CAN_ID, rxHeader.Identifier);
         break;
     }
 
@@ -996,7 +999,7 @@ void MCU_TransmitMessageQueue(CANFDSPI_MODULE_ID index)
         Nop();
         Nop();
         DRV_CANFDSPI_ErrorCountStateGet(index, &tec, &rec, &errorFlags);
-        // TODO: Add TX FIFO error message to debug system
+        ShowDebugMessage(MSG_TX_FIFO_ERROR, index, tec, rec, errorFlags);
 
         //Flush channel
         DRV_CANFDSPI_TransmitChannelFlush(index, MCU_TX_FIFO);
@@ -1052,7 +1055,7 @@ void MCU_RegisterModule(void){
     // Update module counts
     MCU_UpdateModuleCounts();
     
-    // TODO: Add module re-registration info message to debug system
+    ShowDebugMessage(MSG_MODULE_REREGISTER, moduleId, announcement.serialNumber);
   }
   else {
     // New module - find first empty slot
@@ -1080,7 +1083,7 @@ void MCU_RegisterModule(void){
       // Update module counts
       MCU_UpdateModuleCounts();
       
-      // TODO: Add new module registration info message to debug system
+      ShowDebugMessage(MSG_NEW_MODULE_REG, moduleId, announcement.serialNumber, pack.numberOfActiveModules-1);
     }
     else {
       // No more slots available
@@ -1179,7 +1182,7 @@ void MCU_DeRegisterAllModules(void){
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    // TODO: Add DBG_MSG_DEREGISTER_ALL message to debug table
+    ShowDebugMessage(ID_MODULE_DEREGISTER_ALL);
     MCU_TransmitMessageQueue(CAN2);                     // Send it
     
     // Mark all modules as unregistered locally
@@ -1219,7 +1222,7 @@ void MCU_IsolateAllModules(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  // TODO: Add isolate all message to debug system
+  ShowDebugMessage(ID_MODULE_ISOLATE_ALL);
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1260,7 +1263,7 @@ void MCU_ProcessModuleTime(void){
   time_t packTime;
   CANFRM_MODULE_TIME moduleTime;
 
-  // TODO: Add time request message to debug system
+  ShowDebugMessage(ID_MODULE_TIME_REQUEST, moduleId);
 
   // read the RTC as time_t
   packTime = readRTC();
@@ -1284,7 +1287,9 @@ void MCU_ProcessModuleTime(void){
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-  // TODO: Add set time message to debug system
+  ShowDebugMessage(ID_MODULE_SET_TIME, 
+      moduleTime.year, moduleTime.month, moduleTime.day,
+      moduleTime.hour, moduleTime.minute, moduleTime.second);
   MCU_TransmitMessageQueue(CAN2);                     // Send it
 }
 
@@ -1332,7 +1337,7 @@ void MCU_RequestHardware(uint8_t moduleId){
     txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-    // TODO: Add hardware request message to debug system
+    ShowDebugMessage(ID_MODULE_HARDWARE_REQUEST, moduleId);
     MCU_TransmitMessageQueue(CAN2);                    // Send it
   }
 }
@@ -1541,7 +1546,7 @@ void MCU_ProcessModuleStatus1(void){
     }
   if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
-    // TODO: Add unregistered module error to debug system
+    ShowDebugMessage(MSG_UNREGISTERED_MOD, moduleId);
   }else{
     // Track which status message was received
     module[moduleIndex].statusMessagesReceived |= (1 << 0);  // Status1 received
@@ -1553,7 +1558,9 @@ void MCU_ProcessModuleStatus1(void){
     }
     
     // Log timeout counter reset if it was non-zero
-    // TODO: Add timeout reset message to debug system if needed
+    if(module[moduleIndex].consecutiveTimeouts > 0) {
+      ShowDebugMessage(MSG_TIMEOUT_RESET, moduleId, module[moduleIndex].consecutiveTimeouts);
+    }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1658,7 +1665,9 @@ void MCU_ProcessModuleStatus2(void){
     }
     
     // Log timeout counter reset if it was non-zero
-    // TODO: Add timeout reset message to debug system if needed
+    if(module[moduleIndex].consecutiveTimeouts > 0) {
+      ShowDebugMessage(MSG_TIMEOUT_RESET, moduleId, module[moduleIndex].consecutiveTimeouts);
+    }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1733,7 +1742,9 @@ void MCU_ProcessModuleStatus3(void){
     }
     
     // Log timeout counter reset if it was non-zero
-    // TODO: Add timeout reset message to debug system if needed
+    if(module[moduleIndex].consecutiveTimeouts > 0) {
+      ShowDebugMessage(MSG_TIMEOUT_RESET, moduleId, module[moduleIndex].consecutiveTimeouts);
+    }
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on successful response
 
     // save the data
@@ -1833,7 +1844,7 @@ void MCU_RequestCellDetail(uint8_t moduleId){
   txObj.bF.ctrl.FDF = 0;                         // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
   txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
-  // TODO: Add cell detail request message to debug system
+  ShowDebugMessage(MSG_CELL_DETAIL_REQ, moduleId, cellId);
 
   MCU_TransmitMessageQueue(CAN2);                    // Send it
 }
@@ -1942,7 +1953,8 @@ void MCU_ProcessCellDetail(void){
 
   // copy data to announcement structure
   memcpy(&cellDetail, rxd,sizeof(cellDetail));
-  // TODO: Add cell detail RX message to debug system
+  ShowDebugMessage(ID_MODULE_CELL_DETAIL, moduleId, 
+      cellDetail.cellNumber, cellDetail.voltage);
 
   //check whether the module is already registered and perhaps lost its registration
   moduleIndex = MAX_MODULES_PER_PACK; //default the index to the next entry (we are using 0 so next index is the moduleCount)

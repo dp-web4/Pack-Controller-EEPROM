@@ -46,12 +46,56 @@ static const DebugMessageDef debugMessageDefs[] = {
     {ID_MODULE_HARDWARE, DBG_COMMS, DBG_MSG_HARDWARE,
      "MCU RX 0x501 Hardware: ID=%02x", NULL},
      
+    {ID_MODULE_HARDWARE_REQUEST, DBG_COMMS, DBG_MSG_HARDWARE_REQ,
+     "MCU TX 0x511 Hardware Request: ID=%02x", NULL},
+     
+    {ID_MODULE_ISOLATE_ALL, DBG_COMMS, DBG_MSG_ISOLATE_ALL,
+     "MCU TX 0x51F Isolate All Modules", NULL},
+     
+    {ID_MODULE_DEREGISTER_ALL, DBG_COMMS, DBG_MSG_DEREGISTER_ALL,
+     "MCU TX 0x51E De-Register All Modules", NULL},
+     
+    {ID_MODULE_TIME_REQUEST, DBG_COMMS, DBG_MSG_TIME_REQ,
+     "MCU RX 0x506 Time Request from Module ID=%02x", NULL},
+     
+    {ID_MODULE_SET_TIME, DBG_COMMS, DBG_MSG_SET_TIME,
+     "MCU TX 0x516 Set Time: %04d-%02d-%02d %02d:%02d:%02d", NULL},
+     
+    {ID_MODULE_CELL_DETAIL, DBG_COMMS, DBG_MSG_CELL_DETAIL,
+     "MCU RX 0x505 Cell Detail: ID=%02x, Cell=%d, V=%dmV", NULL},
+     
     // Timeout/Error Messages (special IDs)
     {MSG_TIMEOUT_WARNING, DBG_ERRORS, DBG_MSG_TIMEOUT,
      "MCU TIMEOUT - Module ID=%02x (timeout %d of %d)", "%dT%d"},
      
     {MSG_DEREGISTER, DBG_ERRORS, DBG_MSG_DEREGISTER,
      "MCU INFO - Removing module from pack: ID=%02x, UID=%08x, Index=%d", "%dD"},
+     
+    // Module selection and internal events
+    {MSG_VOLTAGE_SELECTION, DBG_MCU, DBG_MSG_VOLTAGE_SEL,
+     "MCU INFO - Selected module ID=%02x with voltage=%dmV", NULL},
+     
+    {MSG_UNKNOWN_CAN_ID, DBG_ERRORS, DBG_MSG_CAN_ERRORS,
+     "MCU ERROR - Unknown CAN ID: 0x%03x", NULL},
+     
+    {MSG_TX_FIFO_ERROR, DBG_ERRORS, DBG_MSG_CAN_ERRORS,
+     "MCU ERROR - TX FIFO error on CAN%d, TEC=%d, REC=%d, Flags=0x%08x", NULL},
+     
+    // Registration events  
+    {MSG_MODULE_REREGISTER, DBG_MCU, DBG_MSG_REG_EVENTS,
+     "MCU INFO - Module re-registered: ID=%02x, UID=%08x", NULL},
+     
+    {MSG_NEW_MODULE_REG, DBG_MCU, DBG_MSG_REG_EVENTS,
+     "MCU INFO - New module registered: ID=%02x, UID=%08x, Index=%d", NULL},
+     
+    {MSG_UNREGISTERED_MOD, DBG_ERRORS, DBG_MSG_REG_EVENTS,
+     "MCU ERROR - Status from unregistered module: ID=%02x", NULL},
+     
+    {MSG_TIMEOUT_RESET, DBG_MCU, DBG_MSG_TIMEOUT,
+     "MCU INFO - Module ID=%02x timeout counter reset (was %d)", NULL},
+     
+    {MSG_CELL_DETAIL_REQ, DBG_COMMS, DBG_MSG_CELL_DETAIL_REQ,
+     "MCU TX 0x515 Cell Detail Request: ID=%02x, Cell=%d", NULL},
      
     // End marker
     {0, 0, 0, NULL, NULL}

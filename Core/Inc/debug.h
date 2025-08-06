@@ -49,6 +49,10 @@
 #define DBG_MSG_POLLING           0x00080000  // Round-robin polling
 #define DBG_MSG_TIMEOUT           0x00100000  // Timeout events
 #define DBG_MSG_MINIMAL           0x00200000  // Minimal status pulse output
+#define DBG_MSG_VOLTAGE_SEL       0x00400000  // Voltage selection messages
+#define DBG_MSG_CAN_ERRORS        0x00800000  // CAN error messages  
+#define DBG_MSG_REG_EVENTS        0x01000000  // Registration events
+#define DBG_MSG_CELL_DETAIL_REQ   0x02000000  // Cell detail request
 #define DBG_MSG_ALL               0xFFFFFFFF
 
 // Message groups for convenience
@@ -60,8 +64,10 @@
  * Debug Configuration
  * Edit these to control what gets displayed
  ***************************************************************************************************************/
-#define DEBUG_LEVEL     (DBG_ERRORS | DBG_COMMS)
-#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | DBG_MSG_TIMEOUT | DBG_MSG_STATUS_REQ | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL)
+#define DEBUG_LEVEL     (DBG_ERRORS | DBG_COMMS | DBG_MCU)
+#define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | \
+                        DBG_MSG_TIMEOUT | DBG_MSG_STATUS_REQ | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL | \
+                        DBG_MSG_REG_EVENTS | DBG_MSG_CAN_ERRORS)
 
 /***************************************************************************************************************
  * Type Definitions
@@ -74,10 +80,19 @@ typedef struct {
     const char* minFormat;     // Minimal format string (NULL if none)
 } DebugMessageDef;
 
-// Special message IDs for non-CAN messages
-#define MSG_TIMEOUT_WARNING    0xF001
-#define MSG_DEREGISTER        0xF002
-#define MSG_MODULE_TIMEOUT    0xF003
+// Special message IDs for non-CAN messages (internal Pack Controller events)
+// These use 0xF000+ range to distinguish from actual CAN message IDs (0x500-0x51F)
+#define MSG_TIMEOUT_WARNING    0xF001  // Module timeout detected
+#define MSG_DEREGISTER        0xF002  // Module being removed from pack
+#define MSG_MODULE_TIMEOUT    0xF003  // Module final timeout
+#define MSG_VOLTAGE_SELECTION  0xF004  // Module voltage selection info
+#define MSG_UNKNOWN_CAN_ID     0xF005  // Unknown CAN message received
+#define MSG_TX_FIFO_ERROR      0xF006  // CAN TX FIFO error
+#define MSG_MODULE_REREGISTER  0xF007  // Module re-registration
+#define MSG_NEW_MODULE_REG     0xF008  // New module registration
+#define MSG_UNREGISTERED_MOD   0xF009  // Unregistered module error
+#define MSG_TIMEOUT_RESET      0xF00A  // Timeout counter reset
+#define MSG_CELL_DETAIL_REQ    0xF00B  // Cell detail request
 
 /***************************************************************************************************************
  * Function Prototypes
