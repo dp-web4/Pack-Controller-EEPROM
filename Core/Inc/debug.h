@@ -54,6 +54,8 @@
 #define DBG_MSG_REG_EVENTS        0x01000000  // Registration events
 #define DBG_MSG_CELL_DETAIL_REQ   0x02000000  // Cell detail request
 #define DBG_MSG_TX_FIFO_ERROR     0x04000000  // TX FIFO error messages (separate flag)
+#define DBG_MSG_POLLING_DETAIL    0x08000000  // Detailed polling information
+#define DBG_MSG_STATE_MACHINE     0x10000000  // State machine transitions
 #define DBG_MSG_ALL               0xFFFFFFFF
 
 // Message groups for convenience
@@ -68,7 +70,13 @@
 #define DEBUG_LEVEL     (DBG_ERRORS | DBG_COMMS | DBG_MCU)
 #define DEBUG_MESSAGES  (DBG_MSG_REGISTRATION_GROUP | DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL | \
                         DBG_MSG_TIMEOUT | DBG_MSG_STATUS_REQ | DBG_MSG_STATUS1 | DBG_MSG_MINIMAL | \
-                        DBG_MSG_REG_EVENTS | DBG_MSG_CAN_ERRORS)
+                        DBG_MSG_REG_EVENTS | DBG_MSG_CAN_ERRORS | \
+                        DBG_MSG_POLLING_DETAIL | DBG_MSG_STATE_MACHINE)
+
+// Define which message types should only be shown once per power cycle
+// These messages will show the first occurrence only, then be suppressed until reset
+#define DEBUG_ONCE_ONLY (DBG_MSG_CAN_ERRORS | DBG_MSG_TX_FIFO_ERROR | \
+                        DBG_MSG_POLLING_DETAIL | DBG_MSG_STATE_MACHINE)
 
 /***************************************************************************************************************
  * Type Definitions
@@ -95,9 +103,19 @@ typedef struct {
 #define MSG_TIMEOUT_RESET      0xF00A  // Timeout counter reset
 #define MSG_CELL_DETAIL_REQ    0xF00B  // Cell detail request
 
+// Polling and status monitoring messages (0xF00C - 0xF00F range)
+#define MSG_POLLING_CYCLE      0xF00C  // Start of polling cycle
+#define MSG_MODULE_CHECK       0xF00D  // Per-module status check
+#define MSG_STATUS_REQUEST     0xF00E  // Status request sent
+#define MSG_STATE_TRANSITION   0xF00F  // Module state machine transition
+
 /***************************************************************************************************************
  * Function Prototypes
  ***************************************************************************************************************/
 void ShowDebugMessage(uint16_t messageId, ...);
+void ResetDebugOnceOnly(void);  // Reset once-only tracking
+
+// Global tracking for once-only messages (bits set as messages are shown)
+extern uint32_t debugOnceShown;
 
 #endif /* DEBUG_H_ */

@@ -322,18 +322,12 @@ void PCU_Tasks(void)
     }
 
     //Check for expired last contact from module
-    /*if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
-      sprintf(tempBuffer,"MCU DEBUG - Checking %d modules", pack.moduleCount); 
-      serialOut(tempBuffer);
-    }*/
+    ShowDebugMessage(MSG_POLLING_CYCLE, pack.moduleCount);
     for (index =0;index < MAX_MODULES_PER_PACK;index++){
       if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
       elapsedTicks = MCU_TicksSinceLastMessage(module[index].moduleId);
-      /*if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
-        sprintf(tempBuffer,"MCU DEBUG - module[%d] ID=%02x elapsed=%lu pending=%d", 
-                index, module[index].moduleId, elapsedTicks, module[index].statusPending); 
-        serialOut(tempBuffer);
-      }*/
+      ShowDebugMessage(MSG_MODULE_CHECK, module[index].moduleId, elapsedTicks, 
+                       module[index].statusPending, module[index].faultCode.commsError);
       if(elapsedTicks > MCU_ET_TIMEOUT && (module[index].statusPending == true)){
         // Increment consecutive timeout counter
         module[index].consecutiveTimeouts++;
@@ -378,11 +372,7 @@ void PCU_Tasks(void)
         }
       }else if(elapsedTicks > MCU_STATUS_INTERVAL && (module[index].statusPending == false)){
         // Send State
-        if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
-          sprintf(tempBuffer,"MCU DEBUG - Requesting status from module ID=%02x (index=%d)", 
-                  module[index].moduleId, index); 
-          serialOut(tempBuffer);
-        }
+        ShowDebugMessage(MSG_STATUS_REQUEST, module[index].moduleId, index);
         MCU_RequestModuleStatus(module[index].moduleId);
         // Have we received the hardware info? This should have been sent at registration
         if(module[index].hardwarePending)
@@ -394,12 +384,8 @@ void PCU_Tasks(void)
           // if the module was in fault, bring it back online
           module[index].faultCode.commsError  = false;
         }
-        if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1 && index == 0){ 
-          sprintf(tempBuffer,"MCU DEBUG - Module ID=%02x elapsed=%lu pending=%d commsErr=%d", 
-                  module[index].moduleId, elapsedTicks, module[index].statusPending,
-                  module[index].faultCode.commsError); 
-          serialOut(tempBuffer);
-        }
+        ShowDebugMessage(MSG_MODULE_CHECK, module[index].moduleId, elapsedTicks, 
+                         module[index].statusPending, module[index].faultCode.commsError);
       }
     }
     
@@ -419,11 +405,7 @@ void PCU_Tasks(void)
           // Only poll modules that are not in timeout/error state
           if(module[nextModuleToPoll].statusPending == false && 
              module[nextModuleToPoll].faultCode.commsError == false){
-            /*if(((debugLevel & DBG_MCU) == DBG_MCU)){ 
-              sprintf(tempBuffer,"MCU DEBUG - Round-robin polling module ID=%02x (index=%d)", 
-                      module[nextModuleToPoll].moduleId, nextModuleToPoll); 
-              serialOut(tempBuffer);
-            }*/
+            ShowDebugMessage(MSG_STATUS_REQUEST, module[nextModuleToPoll].moduleId, nextModuleToPoll);
             MCU_RequestModuleStatus(module[nextModuleToPoll].moduleId);
             
             // Have we received the hardware info?
@@ -469,12 +451,9 @@ void PCU_Tasks(void)
             MCU_TransmitState(module[index].moduleId,module[index].nextState);
           }
         }else {
-          if(((debugLevel & DBG_MCU) == DBG_MCU) && pack.moduleCount > 1){ 
-            sprintf(tempBuffer,"MCU DEBUG - Module ID=%02x current=%d next=%d cmd=%d cmdStatus=%d", 
-                    module[index].moduleId, module[index].currentState, module[index].nextState,
-                    module[index].command.commandedState, module[index].command.commandStatus); 
-            serialOut(tempBuffer);
-          }
+          ShowDebugMessage(MSG_STATE_TRANSITION, module[index].moduleId, 
+                           module[index].currentState, module[index].nextState,
+                           module[index].command.commandedState, module[index].command.commandStatus);
           MCU_TransmitState(module[index].moduleId,module[index].nextState);
         }
       }
@@ -1252,6 +1231,11 @@ void MCU_RequestModuleAnnouncement(void){
   txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
   
   ShowDebugMessage(ID_MODULE_ANNOUNCE_REQUEST);
+  
+  // Special case: Reset once-only flags on announcement request (temporary diagnostic aid)
+  // This allows us to see new debug messages every 5 seconds when announcements are sent
+  ResetDebugOnceOnly();
+  
   MCU_TransmitMessageQueue(CAN2);                  // Send it
 }
 

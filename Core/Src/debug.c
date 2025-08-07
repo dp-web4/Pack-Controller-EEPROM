@@ -98,6 +98,20 @@ static const DebugMessageDef debugMessageDefs[] = {
     {MSG_CELL_DETAIL_REQ, DBG_COMMS, DBG_MSG_CELL_DETAIL_REQ,
      "MCU TX 0x515 Module Detail Request: ID=%02x", NULL},  // Simplified
      
+    // Polling and monitoring messages
+    {MSG_POLLING_CYCLE, DBG_MCU, DBG_MSG_POLLING_DETAIL,
+     "MCU DEBUG - Checking %d modules", NULL},
+     
+    {MSG_MODULE_CHECK, DBG_MCU, DBG_MSG_POLLING_DETAIL,
+     "MCU DEBUG - Module ID=%02x elapsed=%lu pending=%d commsErr=%d", 
+     ".%d"},  // Minimal format: just module ID
+     
+    {MSG_STATUS_REQUEST, DBG_MCU, DBG_MSG_POLLING_DETAIL,
+     "MCU DEBUG - Requesting status from module ID=%02x (index=%d)", NULL},
+     
+    {MSG_STATE_TRANSITION, DBG_MCU, DBG_MSG_STATE_MACHINE,
+     "MCU DEBUG - Module ID=%02x current=%d next=%d cmd=%d cmdStatus=%d", NULL},
+     
     // End marker
     {0, 0, 0, NULL, NULL}
 };
@@ -107,6 +121,9 @@ extern uint8_t debugLevel;
 extern uint32_t debugMessages;
 extern UART_HandleTypeDef huart1;
 extern void serialOut(char *message);
+
+// Global tracking for once-only messages
+uint32_t debugOnceShown = 0;  // Reset to 0 on startup, bits set as messages are shown
 
 // Find message definition by ID
 static const DebugMessageDef* FindDebugMessageDef(uint16_t messageId) {
@@ -139,6 +156,15 @@ void ShowDebugMessage(uint16_t messageId, ...) {
     const DebugMessageDef* def = FindDebugMessageDef(messageId);
     if(!def) return;
     
+    // Check if this is a once-only message that's already been shown
+    if(DEBUG_ONCE_ONLY & def->requiredFlag) {  // Is this a once-only message type?
+        if(debugOnceShown & def->requiredFlag) {  // Has it been shown already?
+            return;  // Don't show again
+        }
+        // Mark as shown for future calls
+        debugOnceShown |= def->requiredFlag;
+    }
+    
     // Determine which format to use
     const char* format = NULL;
     bool useMinimal = (debugMessages & DBG_MSG_MINIMAL) != 0;
@@ -166,4 +192,9 @@ void ShowDebugMessage(uint16_t messageId, ...) {
         // Full mode - use serialOut with newline
         serialOut(tempBuffer);
     }
+}
+
+// Reset once-only tracking (can be called to allow messages to show again)
+void ResetDebugOnceOnly(void) {
+    debugOnceShown = 0;
 }

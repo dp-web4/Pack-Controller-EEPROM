@@ -150,12 +150,38 @@ if(module[moduleIndex].consecutiveTimeouts > 0) {
    ShowDebugMessage(MSG_YOUR_MESSAGE, param1, param2);
    ```
 
+## Once-Only Message System
+
+Some debug messages only need to be shown once to indicate a problem occurred, without flooding the output with repetitions. The once-only system shows the first occurrence of specified message types, then suppresses them until reset.
+
+### Configuration
+In `debug.h`, define which message types should be once-only:
+```c
+#define DEBUG_ONCE_ONLY (DBG_MSG_CAN_ERRORS | DBG_MSG_TX_FIFO_ERROR | \
+                        DBG_MSG_DEREGISTER | DBG_MSG_DEREGISTER_ALL)
+```
+
+### How It Works
+1. First occurrence of a once-only message → Displayed normally
+2. Message flag is marked in `debugOnceShown` variable
+3. Subsequent occurrences → Suppressed (not displayed)
+4. Reset on power cycle or by calling `ResetDebugOnceOnly()`
+
+### Currently Once-Only Messages
+- Unknown CAN IDs (DBG_MSG_CAN_ERRORS) - All CAN communication errors
+- TX FIFO errors (DBG_MSG_TX_FIFO_ERROR) - if enabled
+
+Note: Deregistration messages are NOT once-only, allowing you to see each occurrence
+
+This prevents flooding while ensuring important first occurrences are captured.
+
 ## Performance Considerations
 
-- Messages are filtered at multiple levels (debug level, then message flag)
+- Messages are filtered at multiple levels (debug level, then message flag, then once-only check)
 - Table lookup is linear but typically fast (< 50 entries)
 - Minimal mode reduces UART traffic for high-frequency messages
 - No dynamic memory allocation
+- Once-only tracking uses single 32-bit variable (very efficient)
 
 ## Debugging Module Issues
 
