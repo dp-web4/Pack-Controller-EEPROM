@@ -1028,7 +1028,7 @@ void MCU_RegisterModule(void){
     module[moduleIndex].lastContact.overflows = etTimerOverflows;
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
     module[moduleIndex].statusMessagesReceived = 0;  // Reset status tracking
-    module[moduleIndex].statusPending = true;  // Re-enable status polling
+    module[moduleIndex].statusPending = false;  // Start with false to allow polling
     module[moduleIndex].hardwarePending = true;  // Re-request hardware info
     
     // Update module counts
@@ -1055,7 +1055,7 @@ void MCU_RegisterModule(void){
       module[moduleIndex].mfgId = announcement.moduleMfgId;
       module[moduleIndex].lastContact.ticks = htim1.Instance->CNT;
       module[moduleIndex].lastContact.overflows = etTimerOverflows;
-      module[moduleIndex].statusPending = true;
+      module[moduleIndex].statusPending = false;  // Start with false to allow immediate polling
       module[moduleIndex].consecutiveTimeouts = 0;  // Initialize timeout counter for new module
       module[moduleIndex].statusMessagesReceived = 0;  // Initialize status tracking
       
@@ -1502,7 +1502,6 @@ void MCU_ProcessModuleStatus1(void){
 
   CANFRM_MODULE_STATUS_1 status1;
   uint8_t moduleIndex;
-  uint8_t index;
 
   // copy received data to status structure
   memset(&status1,0,sizeof(status1));
@@ -1519,13 +1518,8 @@ void MCU_ProcessModuleStatus1(void){
                    status1.moduleMmv,                     // module measured voltage
                    (int16_t)status1.moduleMmc);           // module measured current
 
-  //find the module index
-  moduleIndex = MAX_MODULES_PER_PACK;
-  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
-    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
-    if(rxObj.bF.id.EID == module[index].moduleId)
-      moduleIndex = index; // found it - save the index
-    }
+  // Find the module using the helper function
+  moduleIndex = MCU_ModuleIndexFromId(rxObj.bF.id.EID);
   if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     ShowDebugMessage(MSG_UNREGISTERED_MOD, rxObj.bF.id.EID);  // Use EID for module ID
@@ -1608,7 +1602,6 @@ void MCU_ProcessModuleStatus2(void){
 
   CANFRM_MODULE_STATUS_2 status2;
   uint8_t moduleIndex;
-  uint8_t index;
 
   // copy received data to status structure
   memset(&status2,0,sizeof(status2));
@@ -1625,14 +1618,8 @@ void MCU_ProcessModuleStatus2(void){
     serialOut(tempBuffer);
   }
 
-  //find the module index
-  moduleIndex = MAX_MODULES_PER_PACK;
-  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
-    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
-    //if(status.moduleId == module[index].moduleId)
-    if(rxObj.bF.id.EID == module[index].moduleId)
-      moduleIndex = index; // found it - save the index
-    }
+  // Find the module using the helper function
+  moduleIndex = MCU_ModuleIndexFromId(rxObj.bF.id.EID);
   if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus2()"); serialOut(tempBuffer);}
@@ -1686,7 +1673,6 @@ void MCU_ProcessModuleStatus3(void){
 
   CANFRM_MODULE_STATUS_3 status3;
   uint8_t moduleIndex;
-  uint8_t index;
 
   // copy received data to status structure
   memset(&status3,0,sizeof(status3));
@@ -1702,14 +1688,8 @@ void MCU_ProcessModuleStatus3(void){
     serialOut(tempBuffer);
   }
 
-  //find the module index
-  moduleIndex = MAX_MODULES_PER_PACK;
-  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
-    if(!module[index].isRegistered || module[index].uniqueId == 0) continue;
-    //if(status.moduleId == module[index].moduleId)
-    if(rxObj.bF.id.EID == module[index].moduleId)
-      moduleIndex = index; // found it - save the index
-    }
+  // Find the module using the helper function
+  moduleIndex = MCU_ModuleIndexFromId(rxObj.bF.id.EID);
   if (moduleIndex == MAX_MODULES_PER_PACK){
     // Unregistered module
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_ProcessModuleStatus3()"); serialOut(tempBuffer);}
@@ -1761,10 +1741,25 @@ void MCU_ProcessModuleStatus3(void){
 void MCU_ProcessCellCommStatus1(void){
 
   CANFRM_MODULE_CELL_COMM_STATUS_1 cellStatus1;
+  uint8_t moduleIndex;
 
   // copy received data to status structure
   memset(&cellStatus1,0,sizeof(cellStatus1));
   memcpy(&cellStatus1, rxd, sizeof(cellStatus1));
+  
+  // Find the module using the existing helper function
+  moduleIndex = MCU_ModuleIndexFromId(rxObj.bF.id.EID);
+  
+  if(moduleIndex < MAX_MODULES_PER_PACK){
+    // Cell Status is valid communication - clear pending status and reset timeout
+    module[moduleIndex].statusPending = false;
+    module[moduleIndex].statusMessagesReceived = 0;
+    module[moduleIndex].consecutiveTimeouts = 0;
+    
+    // Update last contact time
+    module[moduleIndex].lastContact.ticks = htim1.Instance->CNT;
+    module[moduleIndex].lastContact.overflows = etTimerOverflows;
+  }
 
   if(debugLevel & DBG_MCU){ 
     char eCellCPUs[30];
