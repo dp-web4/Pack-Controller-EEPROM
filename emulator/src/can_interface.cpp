@@ -8,27 +8,52 @@
  ******************************************************************************/
 
 #include "../include/can_interface.h"
+#include "../include/PCANBasicClass.h"
 #include <iostream>
 #include <fstream>
 #include <sstream>
 #include <iomanip>
 #include <cstring>
 
+// Global PCAN-Basic API instance
+static PCANBasicClass* g_pcanAPI = NULL;
+
 namespace PackEmulator {
+
+// Static thread procedure that calls the member function
+DWORD WINAPI CANInterface::ReceiveThreadProc(LPVOID param) {
+    CANInterface* pThis = static_cast<CANInterface*>(param);
+    pThis->ReceiveThreadFunc();
+    return 0;
+}
 
 CANInterface::CANInterface()
     : pcanHandle(PCAN_NONEBUS)
     , connected(false)
     , receiving(false)
     , shouldStop(false)
+    , callbackInterface(NULL)
     , loggingEnabled(false) {
+    
+    // Initialize PCAN API if not already done
+    if (g_pcanAPI == NULL) {
+        g_pcanAPI = new PCANBasicClass();
+    }
     
     // Initialize statistics
     std::memset(&stats, 0, sizeof(stats));
+    
+    // Initialize critical sections
+    InitializeCriticalSection(&statsCriticalSection);
+    InitializeCriticalSection(&rxCriticalSection);
 }
 
 CANInterface::~CANInterface() {
     Disconnect();
+    
+    // Delete critical sections
+    DeleteCriticalSection(&statsCriticalSection);
+    DeleteCriticalSection(&rxCriticalSection);
 }
 
 bool CANInterface::Connect(uint16_t channel, uint16_t baudrate) {
@@ -37,7 +62,12 @@ bool CANInterface::Connect(uint16_t channel, uint16_t baudrate) {
     }
     
     // Initialize PCAN channel
-    TPCANStatus status = CAN_Initialize(channel, baudrate, 0, 0, 0);
+    if (g_pcanAPI == NULL) {
+        SetError("PCAN-Basic API not initialized");
+        return false;
+    }
+    
+    TPCANStatus status = g_pcanAPI->Initialize(channel, baudrate, 0, 0, 0);
     
     if (status != PCAN_ERROR_OK) {
         SetError("Failed to initialize CAN: " + GetPCANErrorText(status));
@@ -48,7 +78,7 @@ bool CANInterface::Connect(uint16_t channel, uint16_t baudrate) {
     connected = true;
     
     // Reset CAN controller
-    CAN_Reset(pcanHandle);
+    g_pcanAPI->Reset(pcanHandle);
     
     return true;
 }
@@ -60,8 +90,8 @@ void CANInterface::Disconnect() {
     
     StopReceiving();
     
-    if (pcanHandle != PCAN_NONEBUS) {
-        CAN_Uninitialize(pcanHandle);
+    if (pcanHandle != PCAN_NONEBUS && g_pcanAPI != NULL) {
+        g_pcanAPI->Uninitialize(pcanHandle);
         pcanHandle = PCAN_NONEBUS;
     }
     
@@ -75,7 +105,7 @@ bool CANInterface::SendMessage(const CANMessage& msg) {
     }
     
     TPCANMsg pcanMsg = ConvertToTPCAN(msg);
-    TPCANStatus status = CAN_Write(pcanHandle, &pcanMsg);
+    TPCANStatus status = g_pcanAPI->Write(pcanHandle, &pcanMsg);
     
     if (status != PCAN_ERROR_OK) {
         SetError("Send failed: " + GetPCANErrorText(status));
@@ -157,7 +187,7 @@ void CANInterface::SetFilterForModules(uint32_t baseId, uint32_t mask) {
     
     // Set PCAN filter
     uint64_t filterValue = ((uint64_t)mask << 32) | baseId;
-    CAN_SetValue(pcanHandle, PCAN_MESSAGE_FILTER, &filterValue, sizeof(filterValue));
+    g_pcanAPI->SetValue(pcanHandle, PCAN_MESSAGE_FILTER, &filterValue, sizeof(filterValue));
 }
 
 void CANInterface::StartReceiving() {
@@ -169,7 +199,8 @@ void CANInterface::StartReceiving() {
     receiving = true;
     
     // Start receive thread
-    rxThread = std::thread(&CANInterface::ReceiveThreadFunc, this);
+    stopThread = false;
+    rxThread = CreateThread(NULL, 0, ReceiveThreadProc, this, 0, NULL);
 }
 
 void CANInterface::StopReceiving() {
@@ -178,10 +209,14 @@ void CANInterface::StopReceiving() {
     }
     
     shouldStop = true;
+    stopThread = true;
     receiving = false;
     
-    if (rxThread.joinable()) {
-        rxThread.join();
+    if (rxThread != NULL) {
+        // Wait for thread to exit
+        WaitForSingleObject(rxThread, 5000);  // 5 second timeout
+        CloseHandle(rxThread);
+        rxThread = NULL;
     }
 }
 
@@ -189,8 +224,8 @@ void CANInterface::ReceiveThreadFunc() {
     TPCANMsg pcanMsg;
     TPCANTimestamp timestamp;
     
-    while (!shouldStop) {
-        TPCANStatus status = CAN_Read(pcanHandle, &pcanMsg, &timestamp);
+    while (!shouldStop && !stopThread) {
+        TPCANStatus status = g_pcanAPI->Read(pcanHandle, &pcanMsg, &timestamp);
         
         if (status == PCAN_ERROR_OK) {
             CANMessage msg = ConvertFromTPCAN(pcanMsg, timestamp);
@@ -202,43 +237,45 @@ void CANInterface::ReceiveThreadFunc() {
             }
             
             // Call callback if set
-            if (messageCallback) {
-                messageCallback(msg);
+            if (callbackInterface) {
+                callbackInterface->OnMessage(msg);
             }
         } else if (status != PCAN_ERROR_QRCVEMPTY) {
             // Error occurred
             stats.errors++;
-            if (errorCallback) {
-                errorCallback(status, GetPCANErrorText(status));
+            if (callbackInterface) {
+                callbackInterface->OnError(status, GetPCANErrorText(status));
             }
         }
         
         // Small delay to prevent CPU spinning
-        std::this_thread::sleep_for(std::chrono::milliseconds(1));
+        Sleep(1);  // 1 millisecond delay
     }
 }
 
 CANInterface::Statistics CANInterface::GetStatistics() {
-    std::lock_guard<std::mutex> lock(statsMutex);
+    EnterCriticalSection(&statsCriticalSection);
     
     // Get bus status
-    if (connected) {
-        TPCANStatus status;
-        CAN_GetStatus(pcanHandle);
+    if (connected && g_pcanAPI != NULL) {
+        TPCANStatus status = g_pcanAPI->GetStatus(pcanHandle);
         
         stats.busOff = (status & PCAN_ERROR_BUSOFF) != 0;
-        stats.errorPassive = (status & PCAN_ERROR_PASSIVE) != 0;
+        stats.errorPassive = (status & PCAN_ERROR_BUSPASSIVE) != 0;
         stats.errorWarning = (status & PCAN_ERROR_BUSWARNING) != 0;
     }
     
-    return stats;
+    Statistics result = stats;
+    LeaveCriticalSection(&statsCriticalSection);
+    return result;
 }
 
 void CANInterface::ResetStatistics() {
-    std::lock_guard<std::mutex> lock(statsMutex);
+    EnterCriticalSection(&statsCriticalSection);
     stats.messagesSent = 0;
     stats.messagesReceived = 0;
     stats.errors = 0;
+    LeaveCriticalSection(&statsCriticalSection);
 }
 
 bool CANInterface::ResetBus() {
@@ -246,7 +283,7 @@ bool CANInterface::ResetBus() {
         return false;
     }
     
-    return CAN_Reset(pcanHandle) == PCAN_ERROR_OK;
+    return (g_pcanAPI != NULL) ? (g_pcanAPI->Reset(pcanHandle) == PCAN_ERROR_OK) : false;
 }
 
 bool CANInterface::SetBusParameters(uint16_t baudrate) {
@@ -276,7 +313,11 @@ void CANInterface::SetError(const std::string& error) {
 
 std::string CANInterface::GetPCANErrorText(TPCANStatus status) {
     char buffer[256];
-    CAN_GetErrorText(status, 0, buffer);
+    if (g_pcanAPI != NULL) {
+        g_pcanAPI->GetErrorText(status, 0, buffer);
+    } else {
+        sprintf(buffer, "Error code: 0x%X", status);
+    }
     return std::string(buffer);
 }
 
@@ -324,7 +365,7 @@ void CANInterface::LogMessage(const CANMessage& msg, bool isTx) {
         return;
     }
     
-    std::ofstream logFile(logFilename, std::ios::app);
+    std::ofstream logFile(logFilename.c_str(), std::ios::app);
     if (!logFile.is_open()) {
         return;
     }
@@ -347,4 +388,4 @@ void CANInterface::LogMessage(const CANMessage& msg, bool isTx) {
     logFile.close();
 }
 
-} // namespace PackEmulator
+} // namespace PackEmulator

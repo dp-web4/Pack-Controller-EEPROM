@@ -1,4 +1,4 @@
-//---------------------------------------------------------------------------
+﻿//---------------------------------------------------------------------------
 #include <vcl.h>
 #pragma hdrstop
 
@@ -22,15 +22,13 @@ __fastcall TMainForm::TMainForm(TComponent* Owner)
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::FormCreate(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     // Initialize managers
-    moduleManager = std::make_unique<PackEmulator::ModuleManager>();
-    canInterface = std::make_unique<PackEmulator::CANInterface>();
+    moduleManager = new PackEmulator::ModuleManager();
+    canInterface = new PackEmulator::CANInterface();
     
-    // Set up CAN callbacks
-    canInterface->SetMessageCallback(
-        [this](const PackEmulator::CANMessage& msg) { OnCANMessage(msg); });
-    canInterface->SetErrorCallback(
-        [this](uint32_t code, const std::string& error) { OnCANError(code, error); });
+    // Set up CAN callback
+    canInterface->SetCallback(this);
     
     // Initialize UI
     UpdateConnectionStatus(false);
@@ -50,8 +48,10 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::FormDestroy(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    // Clean up dynamically allocated objects
     if (isConnected) {
-        DisconnectButtonClick(nullptr);
+        DisconnectButtonClick(NULL);
     }
     
     SaveConfiguration();
@@ -59,6 +59,7 @@ void __fastcall TMainForm::FormDestroy(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::ConnectButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     // Get selected channel (default PCAN-USB)
     uint16_t channel = PCAN_USBBUS1;
     if (CANChannelCombo->ItemIndex > 0) {
@@ -87,6 +88,7 @@ void __fastcall TMainForm::ConnectButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::DisconnectButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     canInterface->StopReceiving();
     canInterface->Disconnect();
     isConnected = false;
@@ -102,6 +104,7 @@ void __fastcall TMainForm::DisconnectButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     moduleManager->StartDiscovery();
     LogMessage("Module discovery started");
     
@@ -115,6 +118,7 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::RegisterButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -134,6 +138,7 @@ void __fastcall TMainForm::RegisterButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::DeregisterButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -148,6 +153,7 @@ void __fastcall TMainForm::DeregisterButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::DeregisterAllButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     moduleManager->DeregisterAllModules();
     LogMessage("All modules deregistered");
     UpdateModuleList();
@@ -155,6 +161,7 @@ void __fastcall TMainForm::DeregisterAllButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetStateButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -173,14 +180,16 @@ void __fastcall TMainForm::SetStateButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetAllStatesButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     PackEmulator::ModuleState state = GetSelectedState();
     moduleManager->SetAllModulesState(state);
     
     // Send to all registered modules
-    auto moduleIds = moduleManager->GetRegisteredModuleIds();
+    std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
     uint8_t stateCmd = static_cast<uint8_t>(state);
     
-    for (uint8_t id : moduleIds) {
+    for (size_t i = 0; i < moduleIds.size(); i++) {
+        uint8_t id = moduleIds[i];
         canInterface->SendStateChange(id, stateCmd);
     }
     
@@ -191,6 +200,7 @@ void __fastcall TMainForm::SetAllStatesButtonClick(TObject *Sender) {
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender, 
     TListItem *Item, bool Selected) {
+    (void)Sender;  // Suppress unused parameter warning
     if (Selected && Item) {
         selectedModuleId = Item->Caption.ToInt();
         UpdateModuleDetails(selectedModuleId);
@@ -199,6 +209,7 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     if (!isConnected) {
         return;
     }
@@ -214,6 +225,7 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::TimeoutTimerTimer(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     moduleManager->CheckTimeouts();
     moduleManager->CheckForFaults();
     
@@ -223,6 +235,7 @@ void __fastcall TMainForm::TimeoutTimerTimer(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::DistributeKeysButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -247,6 +260,7 @@ void __fastcall TMainForm::DistributeKeysButtonClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::ExportDataItemClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     if (SaveDialog->Execute()) {
         // Export module data to CSV
         // TODO: Implement CSV export
@@ -256,6 +270,7 @@ void __fastcall TMainForm::ExportDataItemClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::ExitItemClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
     Close();
 }
 
@@ -267,8 +282,9 @@ void TMainForm::UpdateModuleList() {
     ModuleListView->Items->BeginUpdate();
     ModuleListView->Items->Clear();
     
-    auto modules = moduleManager->GetAllModules();
-    for (auto* module : modules) {
+    std::vector<PackEmulator::ModuleInfo*> modules = moduleManager->GetAllModules();
+    for (size_t i = 0; i < modules.size(); i++) {
+        PackEmulator::ModuleInfo* module = modules[i];
         TListItem* item = ModuleListView->Items->Add();
         item->Caption = IntToStr(module->moduleId);
         item->SubItems->Add(module->isRegistered ? "Registered" : "Discovered");
@@ -280,7 +296,6 @@ void TMainForm::UpdateModuleList() {
             case PackEmulator::ModuleState::STANDBY: stateStr = "Standby"; break;
             case PackEmulator::ModuleState::PRECHARGE: stateStr = "Precharge"; break;
             case PackEmulator::ModuleState::ON: stateStr = "On"; break;
-            case PackEmulator::ModuleState::FAULT: stateStr = "FAULT"; break;
             default: stateStr = "Unknown";
         }
         item->SubItems->Add(stateStr);
@@ -293,8 +308,8 @@ void TMainForm::UpdateModuleList() {
 }
 
 void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
-    auto* module = moduleManager->GetModule(moduleId);
-    if (!module) {
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module == NULL) {
         return;
     }
     
@@ -316,17 +331,17 @@ void TMainForm::UpdateStatusDisplay() {
     StatusBar->Panels->Items[1]->Text = "Current: " + 
         FloatToStrF(moduleManager->GetPackCurrent(), ffFixed, 7, 1) + "A";
     StatusBar->Panels->Items[2]->Text = "Modules: " + 
-        IntToStr(moduleManager->GetModuleCount());
+        IntToStr((int)moduleManager->GetModuleCount());
         
     // Update statistics
-    auto stats = canInterface->GetStatistics();
-    StatusBar->Panels->Items[3]->Text = "TX: " + IntToStr(stats.messagesSent) + 
-                                        " RX: " + IntToStr(stats.messagesReceived);
+    PackEmulator::CANInterface::Statistics stats = canInterface->GetStatistics();
+    StatusBar->Panels->Items[3]->Text = "TX: " + IntToStr((int)stats.messagesSent) + 
+                                        " RX: " + IntToStr((int)stats.messagesReceived);
 }
 
 void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
-    auto* module = moduleManager->GetModule(moduleId);
-    if (!module) {
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module == NULL) {
         return;
     }
     
@@ -336,7 +351,7 @@ void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
     CellGrid->Cells[2][0] = "Temperature";
     
     for (size_t i = 0; i < module->cellVoltages.size(); i++) {
-        CellGrid->Cells[0][i + 1] = IntToStr(i + 1);
+        CellGrid->Cells[0][i + 1] = IntToStr((int)(i + 1));
         CellGrid->Cells[1][i + 1] = FloatToStrF(module->cellVoltages[i], ffFixed, 7, 3);
         CellGrid->Cells[2][i + 1] = FloatToStrF(module->cellTemperatures[i], ffFixed, 7, 1);
     }
@@ -394,6 +409,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
 }
 
 void TMainForm::OnCANError(uint32_t errorCode, const std::string& errorMsg) {
+    (void)errorCode;  // Suppress unused parameter warning
     LogMessage("CAN Error: " + String(errorMsg.c_str()));
 }
 
@@ -435,18 +451,20 @@ void TMainForm::ProcessCellTemperatures(uint8_t moduleId, const uint8_t* data) {
 void TMainForm::ProcessModuleFault(uint8_t moduleId, const uint8_t* data) {
     // Process fault codes
     LogMessage("Module " + IntToStr(moduleId) + " fault: " + IntToHex((int)data[0], 2));
-    moduleManager->SetModuleState(moduleId, PackEmulator::ModuleState::FAULT);
+    // In the STM32 firmware, faults don't change state but set faultCode flags
+    // For now, we'll just log the fault. Could enhance ModuleInfo to track faultCode
 }
 
 void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
+    (void)data;  // Suppress unused parameter warning - TODO: implement detail parsing
     // Process detailed module information
     // data[1]: Number of cells
     // data[2]: Module type/version
     // data[3-4]: Capacity
     // data[5-6]: Cycle count
     
-    auto* module = moduleManager->GetModule(moduleId);
-    if (module) {
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
         LogMessage("Module " + IntToStr(moduleId) + " detail received");
         UpdateModuleDetails(moduleId);
     }

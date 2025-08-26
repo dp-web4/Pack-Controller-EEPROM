@@ -66,7 +66,7 @@ typedef enum {
 typedef struct {
   uint32_t    ticks;
   uint32_t    overflows;
-}lastContact;
+}lastContact_t;
 
 
 typedef struct {
@@ -129,8 +129,8 @@ typedef struct {
   uint8_t     soh;
   uint8_t     cellCount;
   batteryCell cell[MAX_CELLS_PER_MODULE];
-  lastContact lastContact;
-  lastContact lastTransmit;
+  lastContact_t lastContact;
+  lastContact_t lastTransmit;
   bool        hardwarePending;
   bool        statusPending;
   faultCode   faultCode;
@@ -177,7 +177,7 @@ typedef struct {
   packState   vcuRequestedState;
   uint8_t     soc;
   uint8_t     soh;
-  lastContact vcuLastContact;
+  lastContact_t vcuLastContact;
   errorCounts errorCounts;
   bool        rtcValid;
   uint16_t    vcuHvBusVoltage;

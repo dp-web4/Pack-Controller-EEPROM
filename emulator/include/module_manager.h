@@ -14,23 +14,26 @@
 #include <map>
 #include <string>
 #include <cstdint>
-#include <chrono>
+#include <windows.h>  // For GetTickCount()
 
 // Include battery structures from embedded code
 extern "C" {
-    #include "../../Core/Inc/battery.h"
-    #include "../../Core/Inc/can_id_module.h"
+    #include <stdint.h>
+    #include <stdbool.h>
+    #include "../../Core/Inc/bms.h"              // Module states and battery structures
+    #include "../../Core/Inc/can_id_module.h"    // Module CAN message IDs
+    #include "../../Core/Inc/can_id_bms_vcu.h"   // VCU CAN message IDs  
+    #include "../../Core/Inc/can_frm_mod.h"      // Module CAN frame structures
 }
 
 namespace PackEmulator {
 
-// Module states matching embedded pack controller
+// Module states - using values from bms.h moduleState enum
 enum class ModuleState {
-    OFF = 0,
-    STANDBY = 1,
-    PRECHARGE = 2,
-    ON = 3,
-    FAULT = 4,
+    OFF = moduleOff,           // 0
+    STANDBY = moduleStandby,   // 1  
+    PRECHARGE = modulePrecharge, // 2
+    ON = moduleOn,             // 3
     UNKNOWN = 255
 };
 
@@ -53,8 +56,8 @@ struct ModuleInfo {
     std::vector<float> cellVoltages;
     std::vector<float> cellTemperatures;
     
-    // Timing
-    std::chrono::steady_clock::time_point lastMessageTime;
+    // Timing (using Windows GetTickCount - milliseconds since boot)
+    DWORD lastMessageTime;
     uint32_t messageCount;
     uint32_t errorCount;
     
@@ -135,7 +138,7 @@ private:
     // Statistics
     uint32_t totalMessages;
     uint32_t totalErrors;
-    std::chrono::steady_clock::time_point startTime;
+    DWORD startTime;  // Using Windows GetTickCount
     
     // Helper functions
     bool ValidateModuleId(uint8_t moduleId);
@@ -146,4 +149,4 @@ private:
 
 } // namespace PackEmulator
 
-#endif // MODULE_MANAGER_H
+#endif // MODULE_MANAGER_H

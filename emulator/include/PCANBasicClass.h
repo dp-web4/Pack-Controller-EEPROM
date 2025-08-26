@@ -257,4 +257,4 @@ public:
     /// <returns>A TPCANStatus error code</returns>
     TPCANStatus LookUpChannel(LPSTR Parameters, TPCANHandle* FoundChannel);
 };
-#endif
+#endif

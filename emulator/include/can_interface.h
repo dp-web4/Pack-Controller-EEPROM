@@ -13,14 +13,16 @@
 #include <windows.h>
 #include <cstdint>
 #include <string>
-#include <functional>
 #include <queue>
-#include <thread>
-#include <atomic>
-#include <mutex>
 
 // PCAN-Basic API (assuming it's in the project like modbatt-CAN)
 #include "PCANBasic.h"
+
+// Include CAN ID definitions from STM32 firmware
+extern "C" {
+    #include "../../Core/Inc/can_id_module.h"    // Module CAN message IDs
+    #include "../../Core/Inc/can_id_bms_vcu.h"   // VCU CAN message IDs
+}
 
 namespace PackEmulator {
 
@@ -34,9 +36,12 @@ struct CANMessage {
     uint64_t timestamp; // Receive timestamp
 };
 
-// Callback function types
-using MessageCallback = std::function<void(const CANMessage&)>;
-using ErrorCallback = std::function<void(uint32_t errorCode, const std::string& errorMsg)>;
+// Forward declaration for callback interface
+class ICANCallback {
+public:
+    virtual void OnMessage(const CANMessage& msg) = 0;
+    virtual void OnError(uint32_t errorCode, const std::string& errorMsg) = 0;
+};
 
 class CANInterface {
 public:
@@ -53,7 +58,7 @@ public:
     bool SendMessage(uint32_t id, const uint8_t* data, uint8_t length, bool extended = false);
     
     // Specific pack controller messages
-    bool SendModuleCommand(uint8_t moduleId, uint8_t command, const uint8_t* params = nullptr, uint8_t paramLen = 0);
+    bool SendModuleCommand(uint8_t moduleId, uint8_t command, const uint8_t* params = NULL, uint8_t paramLen = 0);
     bool SendStateChange(uint8_t moduleId, uint8_t newState);
     bool SendBalancingCommand(uint8_t moduleId, uint8_t cellMask);
     bool SendRegistrationAck(uint8_t moduleId, bool accepted);
@@ -61,8 +66,7 @@ public:
     bool SendWeb4KeyChunk(uint8_t moduleId, uint8_t chunkNum, const uint8_t* chunk);
     
     // Message reception
-    void SetMessageCallback(MessageCallback callback) { messageCallback = callback; }
-    void SetErrorCallback(ErrorCallback callback) { errorCallback = callback; }
+    void SetCallback(ICANCallback* callback) { callbackInterface = callback; }
     void SetFilterForModules(uint32_t baseId, uint32_t mask);
     
     // Reception control
@@ -97,24 +101,25 @@ private:
     // PCAN handle and state
     TPCANHandle pcanHandle;
     bool connected;
-    std::atomic<bool> receiving;
-    std::atomic<bool> shouldStop;
+    volatile bool receiving;
+    volatile bool shouldStop;
     
-    // Callbacks
-    MessageCallback messageCallback;
-    ErrorCallback errorCallback;
+    // Callback interface
+    ICANCallback* callbackInterface;
     
     // Reception thread
-    std::thread rxThread;
+    HANDLE rxThread;
+    static DWORD WINAPI ReceiveThreadProc(LPVOID param);
     void ReceiveThreadFunc();
+    volatile bool stopThread;
     
     // Message queue for thread-safe handling
     std::queue<CANMessage> rxQueue;
-    std::mutex rxMutex;
+    CRITICAL_SECTION rxCriticalSection;
     
     // Statistics
     Statistics stats;
-    std::mutex statsMutex;
+    CRITICAL_SECTION statsCriticalSection;
     
     // Error handling
     std::string lastError;
@@ -138,9 +143,9 @@ inline uint32_t SetExtendedIdBits(uint32_t baseId, uint8_t bits8to10) {
 }
 
 inline bool IsModuleMessage(uint32_t canId) {
-    // Check if CAN ID is in module message range (0x500-0x51F)
+    // Check if CAN ID is in module message range
     uint32_t baseId = canId & 0x7FF;
-    return (baseId >= 0x500 && baseId <= 0x51F);
+    return (baseId >= ID_MODULE_ANNOUNCEMENT && baseId <= ID_MODULE_ALL_ISOLATE);
 }
 
 inline uint8_t GetModuleIdFromCAN(uint32_t canId) {
@@ -152,15 +157,6 @@ inline uint8_t GetExtendedIdBits(uint32_t canId) {
     return (canId >> 8) & 0x07;
 }
 
-inline bool IsModuleMessage(uint32_t canId) {
-    uint32_t baseId = canId & 0x7FF;
-    return (baseId >= 0x100 && baseId < 0x200);  // Module message range
-}
-
-inline uint8_t GetModuleIdFromCAN(uint32_t canId) {
-    return (canId & 0x1F);  // Lower 5 bits for module ID
-}
-
 } // namespace PackEmulator
 
-#endif // CAN_INTERFACE_H
+#endif // CAN_INTERFACE_H

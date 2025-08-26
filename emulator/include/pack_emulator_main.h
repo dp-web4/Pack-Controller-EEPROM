@@ -11,14 +11,22 @@
 #include <Vcl.Grids.hpp>
 #include <Vcl.Menus.hpp>
 #include <Vcl.Dialogs.hpp>
+// TeeChart components - uncomment if available
+// #include <VCLTee.Chart.hpp>
+// #include <VCLTee.TeEngine.hpp>
+// #include <VCLTee.TeeProcs.hpp>
+// #include <VCLTee.Series.hpp>
 
 #include "module_manager.h"
 #include "can_interface.h"
-#include <memory>
 
 //---------------------------------------------------------------------------
-class TMainForm : public TForm
+class TMainForm : public TForm, public PackEmulator::ICANCallback
 {
+public:  // ICANCallback interface implementation
+    virtual void OnMessage(const PackEmulator::CANMessage& msg) { OnCANMessage(msg); }
+    virtual void OnError(uint32_t errorCode, const std::string& errorMsg) { OnCANError(errorCode, errorMsg); }
+    
 __published:	// IDE-managed Components
     // Main panels
     TPanel *TopPanel;
@@ -67,7 +75,7 @@ __published:	// IDE-managed Components
     
     // Cells tab controls
     TStringGrid *CellGrid;
-    TChart *CellVoltageChart;
+    // TChart *CellVoltageChart;  // Commented out - requires TeeChart component
     TCheckBox *AutoRangeCheck;
     
     // History tab controls
@@ -130,8 +138,8 @@ __published:	// IDE-managed Components
     void __fastcall FormDestroy(TObject *Sender);
     
 private:	// User declarations
-    std::unique_ptr<PackEmulator::ModuleManager> moduleManager;
-    std::unique_ptr<PackEmulator::CANInterface> canInterface;
+    PackEmulator::ModuleManager* moduleManager;
+    PackEmulator::CANInterface* canInterface;
     
     bool isConnected;
     uint8_t selectedModuleId;
@@ -167,4 +175,4 @@ public:		// User declarations
 //---------------------------------------------------------------------------
 extern PACKAGE TMainForm *MainForm;
 //---------------------------------------------------------------------------
-#endif
+#endif

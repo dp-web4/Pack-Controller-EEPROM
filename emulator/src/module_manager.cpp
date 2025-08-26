@@ -10,6 +10,9 @@
 #include "../include/module_manager.h"
 #include <algorithm>
 #include <numeric>
+#include <windows.h>
+#include <sstream>
+#include <stdio.h>
 #include <cstring>
 
 namespace PackEmulator {
@@ -21,7 +24,7 @@ ModuleManager::ModuleManager()
     , maxModules(32)
     , totalMessages(0)
     , totalErrors(0) {
-    startTime = std::chrono::steady_clock::now();
+    startTime = GetTickCount();
 }
 
 ModuleManager::~ModuleManager() {
@@ -33,7 +36,7 @@ void ModuleManager::StartDiscovery() {
     minDiscoveryId = 1;
     
     // Clear any existing unregistered modules
-    for (auto it = modules.begin(); it != modules.end(); ) {
+    for (std::map<uint8_t, ModuleInfo>::iterator it = modules.begin(); it != modules.end(); ) {
         if (!it->second.isRegistered) {
             it = modules.erase(it);
         } else {
@@ -51,7 +54,7 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
         return false;
     }
     
-    if (modules.size() >= maxModules) {
+    if (modules.size() >= (size_t)maxModules) {
         return false;
     }
     
@@ -62,7 +65,7 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.isRegistered = true;
     module.isResponding = true;
     module.hasWeb4Keys = false;
-    module.lastMessageTime = std::chrono::steady_clock::now();
+    module.lastMessageTime = GetTickCount();
     module.messageCount = 0;
     module.errorCount = 0;
     
@@ -82,7 +85,7 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
 }
 
 bool ModuleManager::DeregisterModule(uint8_t moduleId) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
         modules.erase(it);
         return true;
@@ -95,7 +98,7 @@ void ModuleManager::DeregisterAllModules() {
 }
 
 bool ModuleManager::SetModuleState(uint8_t moduleId, ModuleState state) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
         it->second.state = state;
         return true;
@@ -104,7 +107,8 @@ bool ModuleManager::SetModuleState(uint8_t moduleId, ModuleState state) {
 }
 
 bool ModuleManager::SetAllModulesState(ModuleState state) {
-    for (auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         pair.second.state = state;
     }
     return !modules.empty();
@@ -115,7 +119,8 @@ bool ModuleManager::IsolateModule(uint8_t moduleId) {
 }
 
 bool ModuleManager::EnableBalancing(uint8_t moduleId, uint8_t cellMask) {
-    auto it = modules.find(moduleId);
+    (void)cellMask;  // Suppress unused parameter warning - TODO: implement balancing
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
         // TODO: Store balancing state
         return true;
@@ -124,7 +129,7 @@ bool ModuleManager::EnableBalancing(uint8_t moduleId, uint8_t cellMask) {
 }
 
 void ModuleManager::UpdateModuleStatus(uint8_t moduleId, const uint8_t* data) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         // Module not registered, add if discovery active
         if (discoveryActive) {
@@ -137,7 +142,7 @@ void ModuleManager::UpdateModuleStatus(uint8_t moduleId, const uint8_t* data) {
         }
     }
     
-    it->second.lastMessageTime = std::chrono::steady_clock::now();
+    it->second.lastMessageTime = GetTickCount();
     it->second.messageCount++;
     it->second.isResponding = true;
     
@@ -148,12 +153,12 @@ void ModuleManager::UpdateModuleStatus(uint8_t moduleId, const uint8_t* data) {
 }
 
 void ModuleManager::UpdateCellVoltages(uint8_t moduleId, uint8_t startCell, const uint16_t* voltages, uint8_t count) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         return;
     }
     
-    for (uint8_t i = 0; i < count && (startCell + i) < it->second.cellVoltages.size(); i++) {
+    for (uint8_t i = 0; i < count && (startCell + i) < (uint8_t)it->second.cellVoltages.size(); i++) {
         it->second.cellVoltages[startCell + i] = voltages[i] * 0.001f; // Convert mV to V
     }
     
@@ -163,12 +168,12 @@ void ModuleManager::UpdateCellVoltages(uint8_t moduleId, uint8_t startCell, cons
 }
 
 void ModuleManager::UpdateCellTemperatures(uint8_t moduleId, uint8_t startCell, const uint16_t* temps, uint8_t count) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         return;
     }
     
-    for (uint8_t i = 0; i < count && (startCell + i) < it->second.cellTemperatures.size(); i++) {
+    for (uint8_t i = 0; i < count && (startCell + i) < (uint8_t)it->second.cellTemperatures.size(); i++) {
         it->second.cellTemperatures[startCell + i] = temps[i] * 0.1f - 273.15f; // Convert to Celsius
     }
     
@@ -179,7 +184,7 @@ void ModuleManager::UpdateCellTemperatures(uint8_t moduleId, uint8_t startCell, 
 }
 
 void ModuleManager::UpdateModuleElectrical(uint8_t moduleId, float voltage, float current, float temp) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         return;
     }
@@ -187,21 +192,22 @@ void ModuleManager::UpdateModuleElectrical(uint8_t moduleId, float voltage, floa
     it->second.voltage = voltage;
     it->second.current = current;
     it->second.temperature = temp;
-    it->second.lastMessageTime = std::chrono::steady_clock::now();
+    it->second.lastMessageTime = GetTickCount();
     it->second.isResponding = true;
 }
 
 ModuleInfo* ModuleManager::GetModule(uint8_t moduleId) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
         return &it->second;
     }
-    return nullptr;
+    return NULL;
 }
 
 std::vector<ModuleInfo*> ModuleManager::GetAllModules() {
     std::vector<ModuleInfo*> result;
-    for (auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         result.push_back(&pair.second);
     }
     return result;
@@ -209,7 +215,8 @@ std::vector<ModuleInfo*> ModuleManager::GetAllModules() {
 
 std::vector<uint8_t> ModuleManager::GetRegisteredModuleIds() {
     std::vector<uint8_t> result;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered) {
             result.push_back(pair.first);
         }
@@ -218,18 +225,19 @@ std::vector<uint8_t> ModuleManager::GetRegisteredModuleIds() {
 }
 
 bool ModuleManager::IsModuleRegistered(uint8_t moduleId) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     return (it != modules.end() && it->second.isRegistered);
 }
 
 bool ModuleManager::IsModuleResponding(uint8_t moduleId) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     return (it != modules.end() && it->second.isResponding);
 }
 
 float ModuleManager::GetPackVoltage() {
     float total = 0.0f;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered && pair.second.state != ModuleState::OFF) {
             total += pair.second.voltage;
         }
@@ -240,7 +248,8 @@ float ModuleManager::GetPackVoltage() {
 float ModuleManager::GetPackCurrent() {
     // Assuming modules are in parallel, current is max of all modules
     float maxCurrent = 0.0f;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered && pair.second.state != ModuleState::OFF) {
             if (std::abs(pair.second.current) > std::abs(maxCurrent)) {
                 maxCurrent = pair.second.current;
@@ -255,7 +264,8 @@ float ModuleManager::GetPackSoc() {
     
     float totalSoc = 0.0f;
     int count = 0;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered) {
             totalSoc += pair.second.soc;
             count++;
@@ -266,9 +276,11 @@ float ModuleManager::GetPackSoc() {
 
 float ModuleManager::GetMinCellVoltage() {
     float minVoltage = 999.0f;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered) {
-            for (float voltage : pair.second.cellVoltages) {
+            for (size_t i = 0; i < pair.second.cellVoltages.size(); i++) {
+                float voltage = pair.second.cellVoltages[i];
                 if (voltage > 0.1f && voltage < minVoltage) {
                     minVoltage = voltage;
                 }
@@ -280,9 +292,11 @@ float ModuleManager::GetMinCellVoltage() {
 
 float ModuleManager::GetMaxCellVoltage() {
     float maxVoltage = 0.0f;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered) {
-            for (float voltage : pair.second.cellVoltages) {
+            for (size_t i = 0; i < pair.second.cellVoltages.size(); i++) {
+                float voltage = pair.second.cellVoltages[i];
                 if (voltage > maxVoltage) {
                     maxVoltage = voltage;
                 }
@@ -297,7 +311,8 @@ float ModuleManager::GetAverageTemperature() {
     
     float totalTemp = 0.0f;
     int count = 0;
-    for (const auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         if (pair.second.isRegistered) {
             totalTemp += pair.second.temperature;
             count++;
@@ -308,9 +323,11 @@ float ModuleManager::GetAverageTemperature() {
 
 bool ModuleManager::CheckForFaults() {
     bool faultsFound = false;
-    for (auto& pair : modules) {
+    for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        std::pair<const uint8_t, ModuleInfo>& pair = *iter;
         DetectFaults(pair.second);
-        if (pair.second.state == ModuleState::FAULT) {
+        // Check if module has any fault conditions set
+        if (pair.second.errorCount > 0 || !pair.second.isResponding) {
             faultsFound = true;
         }
     }
@@ -320,33 +337,40 @@ bool ModuleManager::CheckForFaults() {
 std::vector<std::string> ModuleManager::GetActiveFaults() {
     std::vector<std::string> faults;
     
-    for (const auto& pair : modules) {
-        if (pair.second.state == ModuleState::FAULT) {
-            faults.push_back("Module " + std::to_string(pair.first) + " in fault state");
+    for (std::map<uint8_t, ModuleInfo>::const_iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        const std::pair<const uint8_t, ModuleInfo>& pair = *iter;
+        // Check for modules with fault conditions (not a separate FAULT state)
+        if (pair.second.errorCount > 0) {
+            char buffer[256];
+            sprintf(buffer, "Module %d has errors (count: %d)", pair.first, pair.second.errorCount);
+            faults.push_back(buffer);
         }
         
         // Check for specific fault conditions
         for (size_t i = 0; i < pair.second.cellVoltages.size(); i++) {
             float voltage = pair.second.cellVoltages[i];
             if (voltage < 2.5f && voltage > 0.1f) {
-                faults.push_back("Module " + std::to_string(pair.first) + 
-                               " Cell " + std::to_string(i) + " undervoltage: " + 
-                               std::to_string(voltage) + "V");
+                char buffer[256];
+                sprintf(buffer, "Module %d Cell %d undervoltage: %.2fV", pair.first, i, voltage);
+                faults.push_back(buffer);
             }
             if (voltage > 4.2f) {
-                faults.push_back("Module " + std::to_string(pair.first) + 
-                               " Cell " + std::to_string(i) + " overvoltage: " + 
-                               std::to_string(voltage) + "V");
+                char buffer[256];
+                sprintf(buffer, "Module %d Cell %d overvoltage: %.2fV", pair.first, i, voltage);
+                faults.push_back(buffer);
             }
         }
         
         if (pair.second.temperature > 60.0f) {
-            faults.push_back("Module " + std::to_string(pair.first) + 
-                           " overtemperature: " + std::to_string(pair.second.temperature) + "°C");
+            char buffer[256];
+            sprintf(buffer, "Module %d overtemperature: %.1f°C", pair.first, pair.second.temperature);
+            faults.push_back(buffer);
         }
         
         if (!pair.second.isResponding) {
-            faults.push_back("Module " + std::to_string(pair.first) + " not responding");
+            char buffer[256];
+            sprintf(buffer, "Module %d not responding", pair.first);
+            faults.push_back(buffer);
         }
     }
     
@@ -354,15 +378,20 @@ std::vector<std::string> ModuleManager::GetActiveFaults() {
 }
 
 void ModuleManager::ClearFaults() {
-    for (auto& pair : modules) {
-        if (pair.second.state == ModuleState::FAULT) {
-            pair.second.state = ModuleState::OFF;
+    for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        std::pair<const uint8_t, ModuleInfo>& pair = *iter;
+        // Clear error counts and reset non-responding modules to OFF
+        if (pair.second.errorCount > 0 || !pair.second.isResponding) {
+            pair.second.errorCount = 0;
+            if (!pair.second.isResponding) {
+                pair.second.state = ModuleState::OFF;
+            }
         }
     }
 }
 
 bool ModuleManager::DistributeWeb4Keys(uint8_t moduleId, const uint8_t* deviceKey, const uint8_t* lctKey) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         return false;
     }
@@ -375,7 +404,7 @@ bool ModuleManager::DistributeWeb4Keys(uint8_t moduleId, const uint8_t* deviceKe
 }
 
 bool ModuleManager::StoreWeb4ComponentId(uint8_t moduleId, const std::string& componentId) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         return false;
     }
@@ -385,11 +414,14 @@ bool ModuleManager::StoreWeb4ComponentId(uint8_t moduleId, const std::string& co
 }
 
 void ModuleManager::CheckTimeouts() {
-    auto now = std::chrono::steady_clock::now();
+    DWORD now = GetTickCount();
     
-    for (auto& pair : modules) {
-        auto elapsed = std::chrono::duration_cast<std::chrono::milliseconds>(
-            now - pair.second.lastMessageTime).count();
+    for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
+        std::pair<const uint8_t, ModuleInfo>& pair = *iter;
+        // Handle tick count wraparound (happens every ~49 days)
+        DWORD elapsed = (now >= pair.second.lastMessageTime) ? 
+                        (now - pair.second.lastMessageTime) : 
+                        (0xFFFFFFFF - pair.second.lastMessageTime + now + 1);
             
         if (elapsed > moduleTimeoutMs) {
             pair.second.isResponding = false;
@@ -401,8 +433,12 @@ void ModuleManager::CheckTimeouts() {
 
 void ModuleManager::UpdateStatistics() {
     // Calculate uptime
-    auto now = std::chrono::steady_clock::now();
-    auto uptime = std::chrono::duration_cast<std::chrono::seconds>(now - startTime).count();
+    DWORD now = GetTickCount();
+    DWORD uptimeMs = (now >= startTime) ? 
+                     (now - startTime) : 
+                     (0xFFFFFFFF - startTime + now + 1);
+    // DWORD uptime = uptimeMs / 1000;  // Convert to seconds - TODO: use this value
+    (void)uptimeMs;  // Suppress unused warning
     
     // Update other statistics as needed
 }
@@ -412,11 +448,11 @@ bool ModuleManager::ValidateModuleId(uint8_t moduleId) {
 }
 
 bool ModuleManager::ValidateCellData(uint8_t moduleId, uint8_t cellIndex) {
-    auto it = modules.find(moduleId);
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it == modules.end()) {
         return false;
     }
-    return cellIndex < it->second.cellVoltages.size();
+    return cellIndex < (uint8_t)it->second.cellVoltages.size();
 }
 
 void ModuleManager::CalculatePackValues() {
@@ -427,33 +463,39 @@ void ModuleManager::CalculatePackValues() {
 void ModuleManager::DetectFaults(ModuleInfo& module) {
     // Check for various fault conditions
     
-    // Undervoltage
-    for (float voltage : module.cellVoltages) {
+    // Undervoltage - increment error count instead of setting FAULT state
+    for (size_t i = 0; i < module.cellVoltages.size(); i++) {
+        float voltage = module.cellVoltages[i];
         if (voltage < 2.5f && voltage > 0.1f) {
-            module.state = ModuleState::FAULT;
+            module.errorCount++;
+            // Module stays in current state but with error flag
             return;
         }
     }
     
-    // Overvoltage
-    for (float voltage : module.cellVoltages) {
+    // Overvoltage - increment error count instead of setting FAULT state
+    for (size_t i = 0; i < module.cellVoltages.size(); i++) {
+        float voltage = module.cellVoltages[i];
         if (voltage > 4.2f) {
-            module.state = ModuleState::FAULT;
+            module.errorCount++;
+            // Module stays in current state but with error flag
             return;
         }
     }
     
-    // Overtemperature
+    // Overtemperature - increment error count instead of setting FAULT state
     if (module.temperature > 60.0f) {
-        module.state = ModuleState::FAULT;
+        module.errorCount++;
+        // Module stays in current state but with error flag
         return;
     }
     
-    // Communication timeout
+    // Communication timeout - mark as not responding but don't change state
     if (!module.isResponding) {
-        module.state = ModuleState::FAULT;
+        module.errorCount++;
+        // Module keeps current state, isResponding flag already indicates the issue
         return;
     }
 }
 
-} // namespace PackEmulator
+} // namespace PackEmulator

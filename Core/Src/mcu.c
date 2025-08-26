@@ -26,8 +26,8 @@
 ***************************************************************************************************************/
 MCU_DATA appData;
 
-lastContact vcuLastContact;
-static lastContact lastAnnounceRequest = {0, 0};  // Track last announcement request time
+lastContact_t vcuLastContact;
+static lastContact_t lastAnnounceRequest = {0, 0};  // Track last announcement request time
 
 CAN_CONFIG config;
 CAN_OPERATION_MODE opMode;
@@ -61,7 +61,7 @@ batteryPack pack;
 
 uint32_t MCU_TicksSinceLastMessage(uint8_t moduleId);
 uint32_t MCU_TicksSinceLastStateTx(uint8_t moduleId);
-uint32_t MCU_ElapsedTicks(lastContact* pLastContact);
+uint32_t MCU_ElapsedTicks(lastContact_t* pLastContact);
 void MCU_UpdateModuleCounts(void);
 void MCU_TransmitState(uint8_t moduleId, moduleState state);
 uint8_t MCU_FindMaxVoltageModule(void);
@@ -253,7 +253,7 @@ void PCU_Tasks(void)
   uint8_t firstModuleIndex;
   uint32_t elapsedTicks;
   static uint8_t nextModuleToPoll = 0;
-  static lastContact lastStatusPoll = {0, 0};
+  static lastContact_t lastStatusPoll = {0, 0};
 
   if(appData.state == PC_STATE_INIT){  // Application initialization
 
@@ -2109,7 +2109,7 @@ uint32_t MCU_TicksSinceLastStateTx(uint8_t moduleId)
 /***************************************************************************************************************
 *     M C U _ E l a p s e d T i c k s                                              P A C K   C O N T R O L L E R
 ***************************************************************************************************************/
-uint32_t MCU_ElapsedTicks(lastContact* pLastContact)
+uint32_t MCU_ElapsedTicks(lastContact_t* pLastContact)
 {
   uint32_t elapsedTicks;
   uint32_t timerCNT;

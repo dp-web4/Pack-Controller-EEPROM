@@ -32,26 +32,26 @@ void PCANBasicClass::LoadAPI()
     //
     if(!LoadDllHandle())
     {
-        ::MessageBox(NULL, "Error: \"Unable to find the DLL PCANBasic.dll!\"", "Error!", MB_ICONERROR);
+        ::MessageBox(NULL, TEXT("Error: \"Unable to find the DLL PCANBasic.dll!\""), TEXT("Error!"), MB_ICONERROR);
         return;
     }
 
     // Loads API functions
     //
-    m_pInitialize = (fpInitialize)GetFunction("CAN_Initialize");
-    m_pInitializeFD = (fpInitializeFD)GetFunction("CAN_InitializeFD");
-    m_pUnInitialize = (fpUninitialize)GetFunction("CAN_Uninitialize");
-    m_pReset = (fpReset)GetFunction("CAN_Reset");
-    m_pGetStatus = (fpGetStatus)GetFunction("CAN_GetStatus");
-    m_pRead = (fpRead)GetFunction("CAN_Read");
-    m_pReadFD = (fpReadFD)GetFunction("CAN_ReadFD");
-    m_pWrite = (fpWrite)GetFunction("CAN_Write");
-    m_pWriteFD = (fpWriteFD)GetFunction("CAN_WriteFD");
-    m_pFilterMessages = (fpFilterMessages)GetFunction("CAN_FilterMessages");
-    m_pGetValue = (fpSetValue)GetFunction("CAN_GetValue");
-    m_pSetValue = (fpGetValue)GetFunction("CAN_SetValue");
-    m_pGetTextError = (fpGetErrorText)GetFunction("CAN_GetErrorText");
-    m_pLookUpChannel = (fpLookUpChannel)GetFunction("CAN_LookUpChannel");
+    m_pInitialize = (fpInitialize)GetFunction(const_cast<char*>("CAN_Initialize"));
+    m_pInitializeFD = (fpInitializeFD)GetFunction(const_cast<char*>("CAN_InitializeFD"));
+    m_pUnInitialize = (fpUninitialize)GetFunction(const_cast<char*>("CAN_Uninitialize"));
+    m_pReset = (fpReset)GetFunction(const_cast<char*>("CAN_Reset"));
+    m_pGetStatus = (fpGetStatus)GetFunction(const_cast<char*>("CAN_GetStatus"));
+    m_pRead = (fpRead)GetFunction(const_cast<char*>("CAN_Read"));
+    m_pReadFD = (fpReadFD)GetFunction(const_cast<char*>("CAN_ReadFD"));
+    m_pWrite = (fpWrite)GetFunction(const_cast<char*>("CAN_Write"));
+    m_pWriteFD = (fpWriteFD)GetFunction(const_cast<char*>("CAN_WriteFD"));
+    m_pFilterMessages = (fpFilterMessages)GetFunction(const_cast<char*>("CAN_FilterMessages"));
+    m_pGetValue = (fpSetValue)GetFunction(const_cast<char*>("CAN_GetValue"));
+    m_pSetValue = (fpGetValue)GetFunction(const_cast<char*>("CAN_SetValue"));
+    m_pGetTextError = (fpGetErrorText)GetFunction(const_cast<char*>("CAN_GetErrorText"));
+    m_pLookUpChannel = (fpLookUpChannel)GetFunction(const_cast<char*>("CAN_LookUpChannel"));
 
     m_bWasLoaded = m_pInitialize && m_pInitializeFD && m_pUnInitialize && m_pReset &&
         m_pGetStatus && m_pRead && m_pReadFD && m_pWrite && m_pWriteFD && m_pFilterMessages &&
@@ -60,7 +60,7 @@ void PCANBasicClass::LoadAPI()
     // If the API was not loaded (Wrong version), an error message is shown.
     //
     if (!m_bWasLoaded)
-        ::MessageBox(NULL, "Error: \"DLL functions could not be loaded!\"", "Error!", MB_ICONERROR);
+        ::MessageBox(NULL, TEXT("Error: \"DLL functions could not be loaded!\""), TEXT("Error!"), MB_ICONERROR);
 }
 
 void PCANBasicClass::UnloadAPI()
@@ -107,7 +107,7 @@ bool PCANBasicClass::LoadDllHandle()
 
     //Loads Dll
     //
-    m_hDll = LoadLibrary("PCANBasic");
+    m_hDll = LoadLibrary(TEXT("PCANBasic"));
 
     // Return true if the DLL was loaded or false otherwise
     //
@@ -274,4 +274,4 @@ TPCANStatus PCANBasicClass::LookUpChannel(
         return PCAN_ERROR_UNKNOWN;
 
     return (TPCANStatus)m_pLookUpChannel(Parameters, FoundChannel);
-}
+}
