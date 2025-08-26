@@ -1,0 +1,168 @@
+﻿<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+    <PropertyGroup>
+        <ProjectGuid>{E8F4D3A1-7B2C-4E5D-9A6F-3C8B5F2A1D90}</ProjectGuid>
+        <ProjectVersion>18.8</ProjectVersion>
+        <FrameworkType>VCL</FrameworkType>
+        <Base>True</Base>
+        <Config Condition="'$(Config)'==''">Debug</Config>
+        <Platform Condition="'$(Platform)'==''">Win32</Platform>
+        <TargetedPlatforms>1</TargetedPlatforms>
+        <AppType>Application</AppType>
+        <MainSource>PackEmulator.cpp</MainSource>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Base' or '$(Base)'!=''">
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Base)'=='true') or '$(Base_Win32)'!=''">
+        <Base_Win32>true</Base_Win32>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Debug' or '$(Cfg_1)'!=''">
+        <Cfg_1>true</Cfg_1>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="('$(Platform)'=='Win32' and '$(Cfg_1)'=='true') or '$(Cfg_1_Win32)'!=''">
+        <Cfg_1_Win32>true</Cfg_1_Win32>
+        <CfgParent>Cfg_1</CfgParent>
+        <Cfg_1>true</Cfg_1>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Config)'=='Release' or '$(Cfg_2)'!=''">
+        <Cfg_2>true</Cfg_2>
+        <CfgParent>Base</CfgParent>
+        <Base>true</Base>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base)'!=''">
+        <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
+        <Icon_MainIcon>PackEmulator_Icon.ico</Icon_MainIcon>
+        <_TCHARMapping>wchar_t</_TCHARMapping>
+        <ProjectType>CppVCLApplication</ProjectType>
+        <PackageImports>rtl.bpi;vcl.bpi</PackageImports>
+        <ILINK_LibraryPath>include\;src\;..\..\modbatt-CAN\WEB4 Modbatt Configuration Utility\;$(ILINK_LibraryPath)</ILINK_LibraryPath>
+        <IncludePath>include\;src\;..\Core\Inc\;..\..\modbatt-CAN\WEB4 Modbatt Configuration Utility\;$(IncludePath)</IncludePath>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Base_Win32)'!=''">
+        <DCC_Namespace>Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;Bde;$(DCC_Namespace)</DCC_Namespace>
+        <BT_BuildType>Debug</BT_BuildType>
+        <VerInfo_Keys>CompanyName=Modular Battery Technologies, Inc.;FileDescription=Pack Controller Emulator;FileVersion=1.0.0.0;InternalName=PackEmulator;LegalCopyright=Copyright 2025;LegalTrademarks=;OriginalFilename=PackEmulator.exe;ProductName=Pack Controller Emulator;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
+        <VerInfo_Locale>1033</VerInfo_Locale>
+        <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1)'!=''">
+        <BCC_OptimizeForSpeed>false</BCC_OptimizeForSpeed>
+        <BCC_DisableOptimizations>true</BCC_DisableOptimizations>
+        <DCC_Optimize>false</DCC_Optimize>
+        <DCC_DebugInfoInExe>true</DCC_DebugInfoInExe>
+        <Defines>_DEBUG;$(Defines)</Defines>
+        <BCC_InlineFunctionExpansion>false</BCC_InlineFunctionExpansion>
+        <IntermediateOutputDir>.\$(Platform)\$(Config)</IntermediateOutputDir>
+        <ILINK_FullDebugInfo>true</ILINK_FullDebugInfo>
+        <BCC_UseRegisterVariables>None</BCC_UseRegisterVariables>
+        <DCC_Define>DEBUG</DCC_Define>
+        <BCC_DebugLineNumbers>true</BCC_DebugLineNumbers>
+        <TASM_DisplaySourceLines>true</TASM_DisplaySourceLines>
+        <BCC_StackFrames>true</BCC_StackFrames>
+        <ILINK_LibraryPath>$(BDS)\lib\$(PLATFORM)\debug;$(ILINK_LibraryPath)</ILINK_LibraryPath>
+        <ILINK_TranslatedLibraryPath>$(BDS)\lib\$(PLATFORM)\debug\$(LANGDIR);$(ILINK_TranslatedLibraryPath)</ILINK_TranslatedLibraryPath>
+        <TASM_Debugging>Full</TASM_Debugging>
+        <BCC_SourceDebuggingOn>true</BCC_SourceDebuggingOn>
+        <BCC_EnableCPPExceptions>true</BCC_EnableCPPExceptions>
+        <BCC_DisableFramePtrElimOpt>true</BCC_DisableFramePtrElimOpt>
+        <BCC_DisableSpellChecking>true</BCC_DisableSpellChecking>
+        <CLANG_UnwindTables>true</CLANG_UnwindTables>
+        <ILINK_MapFileType>DetailedSegments</ILINK_MapFileType>
+        <OutputExt>exe</OutputExt>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
+        <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
+        <OutputExt>exe</OutputExt>
+    </PropertyGroup>
+    <PropertyGroup Condition="'$(Cfg_2)'!=''">
+        <Defines>NDEBUG;$(Defines)</Defines>
+        <TASM_Debugging>None</TASM_Debugging>
+    </PropertyGroup>
+    <ItemGroup>
+        <CppCompile Include="src\main.cpp">
+            <BuildOrder>0</BuildOrder>
+        </CppCompile>
+        <CppCompile Include="src\pack_emulator_main.cpp">
+            <Form>MainForm</Form>
+            <FormType>dfm</FormType>
+            <DependentOn>src\pack_emulator_main.h</DependentOn>
+            <BuildOrder>1</BuildOrder>
+        </CppCompile>
+        <CppCompile Include="src\module_manager.cpp">
+            <BuildOrder>2</BuildOrder>
+        </CppCompile>
+        <CppCompile Include="src\can_interface.cpp">
+            <BuildOrder>3</BuildOrder>
+        </CppCompile>
+        <CppCompile Include="..\..\modbatt-CAN\WEB4 Modbatt Configuration Utility\PCANBasicClass.cpp">
+            <BuildOrder>4</BuildOrder>
+        </CppCompile>
+        <FormResources Include="src\pack_emulator_main.dfm"/>
+        <BuildConfiguration Include="Base">
+            <Key>Base</Key>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Debug">
+            <Key>Cfg_1</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+        <BuildConfiguration Include="Release">
+            <Key>Cfg_2</Key>
+            <CfgParent>Base</CfgParent>
+        </BuildConfiguration>
+    </ItemGroup>
+    <ProjectExtensions>
+        <Borland.Personality>CPlusPlusBuilder.Personality.12</Borland.Personality>
+        <Borland.ProjectType>CppVCLApplication</Borland.ProjectType>
+        <BorlandProject>
+            <CPlusPlusBuilder.Personality>
+                <Source>
+                    <Source Name="MainSource">PackEmulator.cpp</Source>
+                </Source>
+                <VersionInfo>
+                    <VersionInfo Name="IncludeVerInfo">False</VersionInfo>
+                    <VersionInfo Name="AutoIncBuild">False</VersionInfo>
+                    <VersionInfo Name="MajorVer">1</VersionInfo>
+                    <VersionInfo Name="MinorVer">0</VersionInfo>
+                    <VersionInfo Name="Release">0</VersionInfo>
+                    <VersionInfo Name="Build">0</VersionInfo>
+                    <VersionInfo Name="Debug">False</VersionInfo>
+                    <VersionInfo Name="PreRelease">False</VersionInfo>
+                    <VersionInfo Name="Special">False</VersionInfo>
+                    <VersionInfo Name="Private">False</VersionInfo>
+                    <VersionInfo Name="DLL">False</VersionInfo>
+                    <VersionInfo Name="Locale">1033</VersionInfo>
+                    <VersionInfo Name="CodePage">1252</VersionInfo>
+                </VersionInfo>
+                <VersionInfoKeys>
+                    <VersionInfoKeys Name="CompanyName">Modular Battery Technologies, Inc.</VersionInfoKeys>
+                    <VersionInfoKeys Name="FileDescription">Pack Controller Emulator</VersionInfoKeys>
+                    <VersionInfoKeys Name="FileVersion">1.0.0.0</VersionInfoKeys>
+                    <VersionInfoKeys Name="InternalName">PackEmulator</VersionInfoKeys>
+                    <VersionInfoKeys Name="LegalCopyright">Copyright 2025</VersionInfoKeys>
+                    <VersionInfoKeys Name="LegalTrademarks"/>
+                    <VersionInfoKeys Name="OriginalFilename">PackEmulator.exe</VersionInfoKeys>
+                    <VersionInfoKeys Name="ProductName">Pack Controller Emulator</VersionInfoKeys>
+                    <VersionInfoKeys Name="ProductVersion">1.0.0.0</VersionInfoKeys>
+                    <VersionInfoKeys Name="Comments">Windows emulation of pack controller for module testing</VersionInfoKeys>
+                </VersionInfoKeys>
+                <ProjectProperties>
+                    <ProjectProperties Name="AutoShowDeps">False</ProjectProperties>
+                    <ProjectProperties Name="ManagePaths">True</ProjectProperties>
+                    <ProjectProperties Name="VerifyPackages">True</ProjectProperties>
+                    <ProjectProperties Name="IndexFiles">False</ProjectProperties>
+                </ProjectProperties>
+            </CPlusPlusBuilder.Personality>
+            <Platforms>
+                <Platform value="Win32">True</Platform>
+            </Platforms>
+        </BorlandProject>
+        <ProjectFileVersion>12</ProjectFileVersion>
+    </ProjectExtensions>
+    <Import Project="$(BDS)\Bin\CodeGear.Cpp.Targets" Condition="Exists('$(BDS)\Bin\CodeGear.Cpp.Targets')"/>
+    <Import Project="$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj" Condition="Exists('$(APPDATA)\Embarcadero\$(BDSAPPDATABASEDIR)\$(PRODUCTVERSION)\UserTools.proj')"/>
+</Project>
