@@ -1,198 +1,185 @@
 # Pack Controller Emulator
 
-## Overview
-Windows GUI application that emulates pack controller functionality for direct module management via CAN bus. This allows a Windows PC to act as the pack controller without requiring the STM32WB55 hardware.
+Windows GUI application that emulates the Pack Controller functionality for direct battery module testing without requiring the STM32WB55 hardware.
 
 ## Purpose
-- **Development**: Test modules without full battery pack hardware
-- **Diagnostics**: Advanced debugging and analysis capabilities  
-- **Training**: Safe environment for learning battery management
-- **Simulation**: Test edge cases and failure scenarios
 
-## Architecture
+This emulator allows you to:
+- Test battery modules directly via CAN bus using a PCAN-USB adapter
+- Replace the embedded pack controller during development and testing
+- Manage module registration, state control, and monitoring
+- Test Web4 key distribution protocols
+- Debug module communication issues
 
-### System Context
-```
-[Battery Modules] <--CAN--> [Windows PC + PCAN] <--GUI--> [User]
-                                    |
-                            [Pack Emulator App]
-```
+## Hardware Requirements
 
-### Key Differences from Hardware Pack Controller
-| Feature | Hardware Pack Controller | Windows Emulator |
-|---------|-------------------------|------------------|
-| Platform | STM32WB55 Embedded | Windows PC |
-| CAN Interface | Built-in CAN peripheral | PCAN-USB adapter |
-| VCU Communication | Yes (CAN) | No (acts standalone) |
-| Web4 Integration | Yes | Module-level only |
-| EEPROM Storage | Flash emulation | File system |
-| Real-time | Hard real-time | Soft real-time |
+- Windows PC (Windows 10/11 recommended)
+- PCAN-USB adapter (or compatible PEAK CAN interface)
+- CAN bus connection to battery modules
+- 500 kBit/s CAN baudrate (configurable)
+
+## Software Requirements
+
+- RAD Studio / C++ Builder (for building from source)
+- PCAN-Basic drivers installed
+- Visual C++ Runtime (for running pre-built executable)
+
+## Building the Application
+
+1. Open `PackEmulator.cbproj` in RAD Studio
+2. Ensure PCAN-Basic API is installed (included in lib/ directory)
+3. Build configuration:
+   - Debug: For development and testing
+   - Release: For production use
+4. Build the project (F9 or Project → Build)
+
+## Running the Emulator
+
+### Initial Setup
+
+1. Install PCAN-Basic drivers from PEAK System
+2. Connect PCAN-USB adapter to PC
+3. Connect CAN bus to battery modules
+4. Launch PackEmulator.exe
+
+### Connection
+
+1. Select PCAN channel (typically PCAN-USB 1)
+2. Select baudrate (500 kBit/s for standard modules)
+3. Click "Connect"
+4. Status should show "Connected" in green
+
+### Module Discovery
+
+1. Click "Discover" to start module discovery
+2. Modules will announce themselves via CAN
+3. Discovered modules appear in the left panel list
+4. Select a module and click "Register" to register it
+
+### Module Control
+
+1. Select a registered module from the list
+2. Use the State Control panel to:
+   - Set module state (Off/Standby/Precharge/On)
+   - Enable cell balancing
+   - Apply states to all modules
+3. Monitor module status in real-time
+
+### Module Details
+
+The center panel shows detailed module information:
+- **Status Tab**: Voltage, current, temperature, SOC, SOH
+- **Cells Tab**: Individual cell voltages and temperatures
+- **History Tab**: Communication log
+- **Web4 Tab**: Key distribution management
+
+## CAN Protocol
+
+### Module → Pack Controller Messages
+- `0x500`: Module announcement (discovery)
+- `0x502-0x504`: Module status messages
+- `0x505`: Module detail information
+- `0x507-0x508`: Cell communication status
+
+### Pack Controller → Module Commands
+- `0x510`: Module registration acknowledgment
+- `0x514`: State change command
+- `0x516`: Time synchronization
+- `0x518`: Module deregistration
+- `0x51D`: Announce request (discovery trigger)
 
 ## Features
 
-### Phase 1: Core Module Management
-- [ ] Module discovery and registration
-- [ ] Module status monitoring
-- [ ] Basic module control (on/off/standby)
-- [ ] Cell voltage and temperature display
-- [ ] SOC/SOH tracking
+### Module Management
+- Discovery of unregistered modules
+- Registration/deregistration control
+- Module state machine control
+- Fault detection and reporting
 
-### Phase 2: Advanced Control
-- [ ] Module balancing coordination
-- [ ] Charge/discharge control
-- [ ] Fault detection and isolation
-- [ ] Data logging to CSV/database
-- [ ] Real-time graphing
+### Data Monitoring
+- Real-time voltage/current/temperature
+- Individual cell monitoring
+- Pack-level calculations
+- Communication statistics
 
-### Phase 3: Web4 Integration
-- [ ] Module-level Web4 key distribution
-- [ ] Encrypted CAN communication
-- [ ] Module authentication
-- [ ] Trust scoring
+### Web4 Integration
+- Device key distribution
+- LCT key management
+- Component ID storage
+- Encryption enable/disable
 
-## Development Environment
+### Logging
+- CAN message logging to file
+- History display in GUI
+- Export data to CSV
 
-### Requirements
-- **IDE**: C++ Builder Community Edition (same as modbatt-CAN tool)
-- **CAN Interface**: PCAN-USB adapter
-- **Libraries**: 
-  - PCAN-Basic API (already in modbatt-CAN)
-  - Web4 client libraries (from modbatt-CAN)
-  
-### Build Instructions
-1. Open `PackEmulator.cbproj` in C++ Builder
-2. Configure PCAN-Basic library paths
-3. Build for Win32 or Win64 platform
-4. Run with PCAN-USB adapter connected
+## Troubleshooting
+
+### Connection Issues
+- Verify PCAN-Basic drivers installed
+- Check CAN termination (120Ω)
+- Confirm baudrate matches modules
+- Check Windows Device Manager for adapter
+
+### Module Not Responding
+- Check CAN wiring and connections
+- Verify module power supply
+- Send announce request manually
+- Check timeout settings (default 5s)
+
+### Build Errors
+- Ensure all dependencies in include/ and lib/
+- Verify PCANBasic.h and library present
+- Check project include paths
+- Confirm C++ Builder version compatibility
+
+## Testing Checklist
+
+Before hardware testing:
+1. ✓ CAN adapter recognized by Windows
+2. ✓ Correct baudrate selected (500k typical)
+3. ✓ CAN bus properly terminated
+4. ✓ Module power supplies connected
+5. ✓ Safety equipment ready
+6. ✓ Emergency stop accessible
+
+## Safety Notes
+
+⚠️ **WARNING**: This emulator controls real battery modules
+- Always follow proper safety procedures
+- Never leave modules unattended while connected
+- Implement emergency shutdown procedures
+- Monitor temperature and voltage limits
+- Use appropriate safety equipment
 
 ## File Structure
+
 ```
 emulator/
-├── README.md               # This file
-├── docs/
-│   ├── design.md          # Detailed design documentation
-│   ├── protocol.md        # Module communication protocol
-│   └── testing.md         # Test procedures
-├── include/
-│   ├── module_manager.h   # Module management logic
-│   ├── can_interface.h    # PCAN wrapper
-│   ├── pack_emulation.h   # Pack controller logic
-│   └── ui_main.h          # GUI interface
-├── src/
-│   ├── main.cpp           # Application entry point
-│   ├── module_manager.cpp # Module management
-│   ├── can_interface.cpp  # CAN communication
-│   ├── pack_emulation.cpp # Pack logic from embedded
-│   └── ui_main.cpp        # GUI implementation
-├── build/                  # Build outputs
-└── PackEmulator.cbproj     # C++ Builder project
-
+├── include/           # Header files
+│   ├── pack_emulator_main.h
+│   ├── module_manager.h
+│   ├── can_interface.h
+│   ├── can_id_module.h
+│   ├── can_id_bms_vcu.h
+│   └── battery.h
+├── src/              # Source files
+│   ├── main.cpp
+│   ├── pack_emulator_main.cpp
+│   ├── module_manager.cpp
+│   └── can_interface.cpp
+├── lib/              # Libraries
+│   ├── PCANBasic.h
+│   └── PCANBasic.lib
+├── PackEmulator.cbproj  # Project file
+└── README.md         # This file
 ```
-
-## Module Communication Protocol
-
-The emulator implements the same CAN protocol as the hardware pack controller for module communication:
-
-### Key Messages (Module → Pack)
-- **0x100-0x11F**: Module status broadcasts
-- **0x120-0x13F**: Cell voltage reports  
-- **0x140-0x15F**: Temperature data
-- **0x160-0x17F**: Fault reports
-
-### Control Messages (Pack → Module)
-- **0x200-0x21F**: State commands
-- **0x220-0x23F**: Balancing commands
-- **0x240-0x25F**: Configuration updates
-- **0x260-0x27F**: Web4 key distribution
-
-## Integration with Existing Code
-
-### Reusable Components from Pack-Controller-EEPROM
-- `can_id_*.h` - CAN ID definitions
-- `battery.h` - Battery data structures
-- Module management algorithms
-- State machine logic
-
-### Reusable Components from modbatt-CAN
-- PCAN-Basic interface code
-- Web4 client integration
-- UI framework and styling
-- Debug/logging infrastructure
-
-## Testing Strategy
-
-### Unit Testing
-- Module registration/deregistration
-- State transitions
-- Fault handling
-- Data validation
-
-### Integration Testing  
-- Physical module communication
-- Multi-module coordination
-- Timing and synchronization
-- Error recovery
-
-### System Testing
-- Full pack simulation
-- Performance under load
-- Long-duration stability
-- Edge case scenarios
-
-## Safety Considerations
-
-**WARNING**: This emulator controls real battery modules which can be dangerous if mishandled.
-
-### Safety Features
-- Voltage limits enforcement
-- Current limits enforcement
-- Temperature monitoring
-- Emergency shutdown capability
-- Watchdog timers
-
-### Required Safeguards
-- Always use current-limited power supplies
-- Never exceed module specifications
-- Monitor temperatures continuously
-- Have emergency stop accessible
-- Log all commands for audit
-
-## Development Roadmap
-
-### Milestone 1: Basic Communication (Week 1)
-- PCAN interface working
-- Module discovery functional
-- Status display updating
-
-### Milestone 2: Module Control (Week 2)
-- State commands working
-- Multiple modules supported
-- Basic UI complete
-
-### Milestone 3: Full Emulation (Week 3-4)
-- All pack controller functions
-- Data logging implemented
-- Testing complete
-
-### Future Enhancements
-- Hardware-in-loop testing
-- Automated test sequences
-- Machine learning for fault prediction
-- Integration with digital twin
-
-## Contributing
-
-This emulator is part of the larger Web4 battery management ecosystem. When contributing:
-
-1. Follow existing code style from modbatt-CAN
-2. Maintain compatibility with hardware pack controller protocols
-3. Document all protocol changes
-4. Test with real modules before committing
-5. Update both code and documentation
 
 ## License
 
-Copyright (C) 2025 Modular Battery Technologies, Inc.
-US Patents 11,380,942; 11,469,470; 11,575,270; others pending.
+Copyright (C) 2025 Modular Battery Technologies, Inc.  
+Protected by US Patents 11,380,942; 11,469,470; 11,575,270; others.
 
-This emulator is proprietary software for development and testing purposes.
+## Support
+
+For issues or questions, contact the Pack Controller development team.

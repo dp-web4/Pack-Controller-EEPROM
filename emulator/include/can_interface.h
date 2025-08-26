@@ -137,6 +137,17 @@ inline uint32_t SetExtendedIdBits(uint32_t baseId, uint8_t bits8to10) {
     return baseId | ((bits8to10 & 0x07) << 8);
 }
 
+inline bool IsModuleMessage(uint32_t canId) {
+    // Check if CAN ID is in module message range (0x500-0x51F)
+    uint32_t baseId = canId & 0x7FF;
+    return (baseId >= 0x500 && baseId <= 0x51F);
+}
+
+inline uint8_t GetModuleIdFromCAN(uint32_t canId) {
+    // Extract module ID from extended bits or data
+    return (canId >> 8) & 0x1F;
+}
+
 inline uint8_t GetExtendedIdBits(uint32_t canId) {
     return (canId >> 8) & 0x07;
 }

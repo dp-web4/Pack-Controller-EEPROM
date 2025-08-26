@@ -107,7 +107,7 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
     
     // Send announcement request
     uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    canInterface->SendMessage(ID_PACK_ANNOUNCE_REQUEST, data, 8);
+    canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8);
     
     DiscoverButton->Caption = "Stop Discovery";
     DiscoverButton->Tag = 1;  // Use tag to track state
@@ -354,21 +354,42 @@ void TMainForm::UpdateConnectionStatus(bool connected) {
 
 void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     // Process message based on ID
-    uint32_t baseId = msg.id & 0x7FF;
+    uint32_t canId = msg.id & 0x7FF;
     
-    if (PackEmulator::IsModuleMessage(msg.id)) {
-        uint8_t moduleId = PackEmulator::GetModuleIdFromCAN(msg.id);
+    // Check for module announcements
+    if (canId == ID_MODULE_ANNOUNCEMENT) {
+        // Extract module ID from data
+        uint8_t moduleId = msg.data[0];
+        uint32_t uniqueId = (msg.data[4] << 24) | (msg.data[5] << 16) | 
+                           (msg.data[6] << 8) | msg.data[7];
         
-        // Determine message type
-        if (baseId >= ID_MODULE_STATUS_BASE && baseId < ID_MODULE_STATUS_BASE + 0x20) {
-            ProcessModuleStatus(moduleId, msg.data);
-        } else if (baseId >= ID_MODULE_CELL_VOLTAGE_BASE && baseId < ID_MODULE_CELL_VOLTAGE_BASE + 0x20) {
-            ProcessCellVoltages(moduleId, msg.data);
-        } else if (baseId >= ID_MODULE_CELL_TEMP_BASE && baseId < ID_MODULE_CELL_TEMP_BASE + 0x20) {
-            ProcessCellTemperatures(moduleId, msg.data);
-        } else if (baseId >= ID_MODULE_FAULT_BASE && baseId < ID_MODULE_FAULT_BASE + 0x20) {
-            ProcessModuleFault(moduleId, msg.data);
+        if (moduleManager->IsDiscoveryActive()) {
+            moduleManager->RegisterModule(moduleId, uniqueId);
+            canInterface->SendRegistrationAck(moduleId, true);
+            LogMessage("Discovered module " + IntToStr(moduleId));
+            UpdateModuleList();
         }
+    }
+    // Check for module status messages
+    else if (canId == ID_MODULE_STATUS_1 || canId == ID_MODULE_STATUS_2 || 
+             canId == ID_MODULE_STATUS_3 || canId == ID_MODULE_STATUS_4) {
+        uint8_t moduleId = msg.data[0];  // Module ID is typically in first byte
+        ProcessModuleStatus(moduleId, msg.data);
+    }
+    // Check for cell voltage data (from VCU interface, repurpose for modules)
+    else if (canId == ID_MODULE_CELL_VOLTAGE) {
+        uint8_t moduleId = msg.data[0];
+        ProcessCellVoltages(moduleId, msg.data);
+    }
+    // Check for cell temperature data
+    else if (canId == ID_MODULE_CELL_TEMP) {
+        uint8_t moduleId = msg.data[0];
+        ProcessCellTemperatures(moduleId, msg.data);
+    }
+    // Check for module detail messages
+    else if (canId == ID_MODULE_DETAIL) {
+        uint8_t moduleId = msg.data[0];
+        ProcessModuleDetail(moduleId, msg.data);
     }
 }
 
@@ -415,6 +436,20 @@ void TMainForm::ProcessModuleFault(uint8_t moduleId, const uint8_t* data) {
     // Process fault codes
     LogMessage("Module " + IntToStr(moduleId) + " fault: " + IntToHex((int)data[0], 2));
     moduleManager->SetModuleState(moduleId, PackEmulator::ModuleState::FAULT);
+}
+
+void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
+    // Process detailed module information
+    // data[1]: Number of cells
+    // data[2]: Module type/version
+    // data[3-4]: Capacity
+    // data[5-6]: Cycle count
+    
+    auto* module = moduleManager->GetModule(moduleId);
+    if (module) {
+        LogMessage("Module " + IntToStr(moduleId) + " detail received");
+        UpdateModuleDetails(moduleId);
+    }
 }
 
 void TMainForm::LogMessage(const String& msg) {

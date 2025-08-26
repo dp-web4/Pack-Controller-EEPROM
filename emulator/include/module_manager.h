@@ -73,6 +73,7 @@ public:
     // Module discovery and registration
     void StartDiscovery();
     void StopDiscovery();
+    bool IsDiscoveryActive() const { return discoveryActive; }
     bool RegisterModule(uint8_t moduleId, uint32_t uniqueId);
     bool DeregisterModule(uint8_t moduleId);
     void DeregisterAllModules();
@@ -125,7 +126,7 @@ public:
 private:
     std::map<uint8_t, ModuleInfo> modules;
     bool discoveryActive;
-    uint8_ราinDiscoveryId;
+    uint8_t minDiscoveryId;
     
     // Configuration
     uint32_t moduleTimeoutMs;

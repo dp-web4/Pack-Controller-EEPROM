@@ -152,6 +152,7 @@ private:	// User declarations
     void ProcessCellVoltages(uint8_t moduleId, const uint8_t* data);
     void ProcessCellTemperatures(uint8_t moduleId, const uint8_t* data);
     void ProcessModuleFault(uint8_t moduleId, const uint8_t* data);
+    void ProcessModuleDetail(uint8_t moduleId, const uint8_t* data);
     
     // Helper functions
     void LogMessage(const String& msg);
