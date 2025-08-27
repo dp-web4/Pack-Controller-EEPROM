@@ -429,10 +429,33 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     
     // Check for module announcements
     if (canId == ID_MODULE_ANNOUNCEMENT) {
-        // Extract module ID from data
+        // Extract module ID from data - try different interpretations
         uint8_t moduleId = msg.data[0];
-        uint32_t uniqueId = (msg.data[4] << 24) | (msg.data[5] << 16) | 
-                           (msg.data[6] << 8) | msg.data[7];
+        
+        // Try different positions for unique ID
+        uint32_t uniqueId1 = (msg.data[4] << 24) | (msg.data[5] << 16) | 
+                            (msg.data[6] << 8) | msg.data[7];
+        uint32_t uniqueId2 = (msg.data[0] << 24) | (msg.data[1] << 16) | 
+                            (msg.data[2] << 8) | msg.data[3];
+        uint32_t uniqueId3 = (msg.data[1] << 24) | (msg.data[2] << 16) | 
+                            (msg.data[3] << 8) | msg.data[4];
+        
+        LogMessage("Module announce - ModuleID=" + IntToStr(moduleId) + 
+                  " UniqueID pos[4-7]=0x" + IntToHex((int)uniqueId1, 8) +
+                  " pos[0-3]=0x" + IntToHex((int)uniqueId2, 8) +
+                  " pos[1-4]=0x" + IntToHex((int)uniqueId3, 8));
+        
+        // If 0x0004babe appears at position 0-3, module ID might be elsewhere
+        uint32_t uniqueId = uniqueId1;  // Default to original position
+        if (uniqueId2 == 0x0004babe) {
+            uniqueId = uniqueId2;
+            moduleId = msg.data[4];  // Try module ID at position 4
+            LogMessage("Detected unique ID at bytes 0-3, module ID at byte 4");
+        } else if (uniqueId3 == 0x0004babe) {
+            uniqueId = uniqueId3;
+            moduleId = msg.data[0];  // Module ID at position 0
+            LogMessage("Detected unique ID at bytes 1-4, module ID at byte 0");
+        }
         
         // Always process module announcements - modules announce when they need registration
         if (!moduleManager->IsModuleRegistered(moduleId)) {

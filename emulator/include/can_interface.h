@@ -37,11 +37,14 @@ struct CANMessage {
 };
 
 // Forward declaration for callback interface
+// Note: Named with 'I' prefix for interface convention, but not a COM interface
+#pragma warn -8130  // Suppress "Interface does not derive from IUnknown" warning
 class ICANCallback {
 public:
     virtual void OnMessage(const CANMessage& msg) = 0;
     virtual void OnError(uint32_t errorCode, const std::string& errorMsg) = 0;
 };
+#pragma warn .8130  // Restore warning
 
 class CANInterface {
 public:
