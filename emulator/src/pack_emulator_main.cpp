@@ -66,15 +66,32 @@ void __fastcall TMainForm::ConnectButtonClick(TObject *Sender) {
         channel = PCAN_USBBUS1 + CANChannelCombo->ItemIndex;
     }
     
-    // Get baudrate
-    uint16_t baudrate = PCAN_BAUD_500K;  // Default 500K for battery modules
+    // Get baudrate from combo box or use default
+    uint16_t baudrate = PCAN_BAUD_500K;  // Default 500K
+    if (BaudrateCombo && BaudrateCombo->ItemIndex >= 0) {
+        switch(BaudrateCombo->ItemIndex) {
+            case 0: baudrate = PCAN_BAUD_125K; break;
+            case 1: baudrate = PCAN_BAUD_250K; break;
+            case 2: baudrate = PCAN_BAUD_500K; break;
+            case 3: baudrate = PCAN_BAUD_1M; break;
+            default: baudrate = PCAN_BAUD_500K;
+        }
+    }
     
     // Connect to CAN
     if (canInterface->Connect(channel, baudrate)) {
         canInterface->StartReceiving();
         isConnected = true;
         UpdateConnectionStatus(true);
-        LogMessage("Connected to CAN bus");
+        String baudrateStr;
+        switch(baudrate) {
+            case PCAN_BAUD_125K: baudrateStr = "125K"; break;
+            case PCAN_BAUD_250K: baudrateStr = "250K"; break;
+            case PCAN_BAUD_500K: baudrateStr = "500K"; break;
+            case PCAN_BAUD_1M: baudrateStr = "1M"; break;
+            default: baudrateStr = "Unknown";
+        }
+        LogMessage("Connected to CAN bus at " + baudrateStr + " baud");
         
         // Enable controls
         DiscoverButton->Enabled = true;
@@ -110,7 +127,11 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
     
     // Send announcement request
     uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8);
+    if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8)) {
+        LogMessage("Sent module discovery request (CAN ID 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + ")");
+    } else {
+        LogMessage("Failed to send discovery request: " + String(canInterface->GetLastError().c_str()));
+    }
     
     DiscoverButton->Caption = "Stop Discovery";
     DiscoverButton->Tag = 1;  // Use tag to track state
@@ -371,6 +392,13 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     // Process message based on ID
     uint32_t canId = msg.id & 0x7FF;
     
+    // Debug: Log all received messages
+    String dataStr;
+    for (int i = 0; i < msg.length; i++) {
+        dataStr += IntToHex((int)msg.data[i], 2) + " ";
+    }
+    LogMessage("RX CAN ID 0x" + IntToHex((int)canId, 3) + " Data: " + dataStr);
+    
     // Check for module announcements
     if (canId == ID_MODULE_ANNOUNCEMENT) {
         // Extract module ID from data
@@ -409,8 +437,16 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
 }
 
 void TMainForm::OnCANError(uint32_t errorCode, const std::string& errorMsg) {
-    (void)errorCode;  // Suppress unused parameter warning
-    LogMessage("CAN Error: " + String(errorMsg.c_str()));
+    String errStr = "CAN Error (0x" + IntToHex((int)errorCode, 8) + "): " + String(errorMsg.c_str());
+    LogMessage(errStr);
+    
+    // Check for specific error conditions
+    if (errorCode & PCAN_ERROR_BUSOFF) {
+        LogMessage("  -> Bus OFF: No other devices on bus or severe error");
+    }
+    if (errorCode & PCAN_ERROR_BUSWARNING) {
+        LogMessage("  -> Bus Warning: Check termination resistors and baudrate");
+    }
 }
 
 void TMainForm::ProcessModuleStatus(uint8_t moduleId, const uint8_t* data) {
