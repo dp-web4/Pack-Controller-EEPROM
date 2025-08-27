@@ -38,13 +38,12 @@ struct CANMessage {
 
 // Forward declaration for callback interface
 // Note: Named with 'I' prefix for interface convention, but not a COM interface
-#pragma warn -8130  // Suppress "Interface does not derive from IUnknown" warning
-class ICANCallback {
+// Rename to avoid BCC32 COM interface warning
+class CANCallbackInterface {
 public:
     virtual void OnMessage(const CANMessage& msg) = 0;
     virtual void OnError(uint32_t errorCode, const std::string& errorMsg) = 0;
 };
-#pragma warn .8130  // Restore warning
 
 class CANInterface {
 public:
@@ -69,7 +68,7 @@ public:
     bool SendWeb4KeyChunk(uint8_t moduleId, uint8_t chunkNum, const uint8_t* chunk);
     
     // Message reception
-    void SetCallback(ICANCallback* callback) { callbackInterface = callback; }
+    void SetCallback(CANCallbackInterface* callback) { callbackInterface = callback; }
     void SetFilterForModules(uint32_t baseId, uint32_t mask);
     
     // Reception control
@@ -108,7 +107,7 @@ private:
     volatile bool shouldStop;
     
     // Callback interface
-    ICANCallback* callbackInterface;
+    CANCallbackInterface* callbackInterface;
     
     // Reception thread
     HANDLE rxThread;

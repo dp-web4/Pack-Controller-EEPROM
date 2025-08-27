@@ -388,4 +388,4 @@ void CANInterface::LogMessage(const CANMessage& msg, bool isTx) {
     logFile.close();
 }
 
-} // namespace PackEmulator
+} // namespace PackEmulator

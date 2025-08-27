@@ -21,9 +21,9 @@
 #include "can_interface.h"
 
 //---------------------------------------------------------------------------
-class TMainForm : public TForm, public PackEmulator::ICANCallback
+class TMainForm : public TForm, public PackEmulator::CANCallbackInterface
 {
-public:  // ICANCallback interface implementation
+public:  // CANCallbackInterface implementation
     virtual void OnMessage(const PackEmulator::CANMessage& msg) { OnCANMessage(msg); }
     virtual void OnError(uint32_t errorCode, const std::string& errorMsg) { OnCANError(errorCode, errorMsg); }
     

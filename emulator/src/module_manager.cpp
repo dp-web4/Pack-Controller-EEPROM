@@ -1,4 +1,4 @@
-/******************************************************************************
+﻿/******************************************************************************
  * @file    module_manager.cpp
  * @brief   Battery module management implementation
  * @author  Pack Emulator Development Team
@@ -498,4 +498,4 @@ void ModuleManager::DetectFaults(ModuleInfo& module) {
     }
 }
 
-} // namespace PackEmulator
+} // namespace PackEmulator

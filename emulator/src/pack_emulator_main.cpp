@@ -427,51 +427,97 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     }
     LogMessage("RX CAN ID 0x" + IntToHex((int)canId, 3) + " Data: " + dataStr);
     
-    // Check for module announcements
-    if (canId == ID_MODULE_ANNOUNCEMENT) {
-        // Extract module ID from data - try different interpretations
-        uint8_t moduleId = msg.data[0];
+    // Check for module announcements (0x500 or 0x000 for compatibility)
+    // Module firmware bug: sending on 0x000 instead of 0x500
+    if (canId == ID_MODULE_ANNOUNCEMENT || canId == 0x000) {
+        // Parse according to CANFRM_MODULE_ANNOUNCEMENT structure:
+        // Bytes 0-1: Module firmware version (16 bits)
+        // Byte 2: Module manufacturer ID (8 bits) 
+        // Byte 3: Module part ID (8 bits)
+        // Bytes 4-7: Module unique ID (32 bits, little-endian)
         
-        // Try different positions for unique ID
-        uint32_t uniqueId1 = (msg.data[4] << 24) | (msg.data[5] << 16) | 
-                            (msg.data[6] << 8) | msg.data[7];
-        uint32_t uniqueId2 = (msg.data[0] << 24) | (msg.data[1] << 16) | 
-                            (msg.data[2] << 8) | msg.data[3];
-        uint32_t uniqueId3 = (msg.data[1] << 24) | (msg.data[2] << 16) | 
-                            (msg.data[3] << 8) | msg.data[4];
+        uint16_t fwVersion = msg.data[0] | (msg.data[1] << 8);
+        uint8_t mfgId = msg.data[2];
+        uint8_t partId = msg.data[3];
         
-        LogMessage("Module announce - ModuleID=" + IntToStr(moduleId) + 
-                  " UniqueID pos[4-7]=0x" + IntToHex((int)uniqueId1, 8) +
-                  " pos[0-3]=0x" + IntToHex((int)uniqueId2, 8) +
-                  " pos[1-4]=0x" + IntToHex((int)uniqueId3, 8));
+        // Unique ID is little-endian in bytes 4-7
+        uint32_t uniqueId = msg.data[4] | (msg.data[5] << 8) | 
+                           (msg.data[6] << 16) | (msg.data[7] << 24);
         
-        // If 0x0004babe appears at position 0-3, module ID might be elsewhere
-        uint32_t uniqueId = uniqueId1;  // Default to original position
-        if (uniqueId2 == 0x0004babe) {
-            uniqueId = uniqueId2;
-            moduleId = msg.data[4];  // Try module ID at position 4
-            LogMessage("Detected unique ID at bytes 0-3, module ID at byte 4");
-        } else if (uniqueId3 == 0x0004babe) {
-            uniqueId = uniqueId3;
-            moduleId = msg.data[0];  // Module ID at position 0
-            LogMessage("Detected unique ID at bytes 1-4, module ID at byte 0");
+        LogMessage("Module announcement received:");
+        LogMessage("  FW Version: 0x" + IntToHex(fwVersion, 4));
+        LogMessage("  Mfg ID: 0x" + IntToHex(mfgId, 2));
+        LogMessage("  Part ID: 0x" + IntToHex(partId, 2));
+        LogMessage("  Unique ID: 0x" + IntToHex((int)uniqueId, 8));
+        
+        // Module doesn't send its assigned ID in announcement
+        // We need to assign one based on unique ID
+        uint8_t moduleId = 0;
+        
+        // Check if we already know this module
+        std::vector<uint8_t> existingIds = moduleManager->GetRegisteredModuleIds();
+        for (size_t i = 0; i < existingIds.size(); i++) {
+            PackEmulator::ModuleInfo* mod = moduleManager->GetModule(existingIds[i]);
+            if (mod && mod->uniqueId == uniqueId) {
+                moduleId = existingIds[i];
+                break;
+            }
         }
         
-        // Always process module announcements - modules announce when they need registration
-        if (!moduleManager->IsModuleRegistered(moduleId)) {
-            // New module announcing itself
-            if (moduleManager->RegisterModule(moduleId, uniqueId)) {
-                canInterface->SendRegistrationAck(moduleId, true);
-                LogMessage("Registered module " + IntToStr(moduleId) + 
-                          " with ID 0x" + IntToHex((int)uniqueId, 8));
-                UpdateModuleList();
+        // If not found, assign next available ID
+        if (moduleId == 0) {
+            // Find lowest available ID starting from 1
+            for (uint8_t id = 1; id <= 32; id++) {
+                if (!moduleManager->IsModuleRegistered(id)) {
+                    moduleId = id;
+                    break;
+                }
+            }
+        }
+        
+        // Process registration
+        if (moduleId > 0 && moduleId <= 32) {
+            if (!moduleManager->IsModuleRegistered(moduleId)) {
+                // New module - register it
+                if (moduleManager->RegisterModule(moduleId, uniqueId)) {
+                    // Send registration ACK with the assigned module ID
+                    // According to CANFRM_MODULE_REGISTRATION (0x510):
+                    uint8_t regData[8];
+                    regData[0] = moduleId;      // Assigned module ID
+                    regData[1] = 0x01;          // Controller ID (pack controller = 1)
+                    regData[2] = mfgId;         // Echo back mfg ID
+                    regData[3] = partId;        // Echo back part ID
+                    regData[4] = uniqueId & 0xFF;
+                    regData[5] = (uniqueId >> 8) & 0xFF;
+                    regData[6] = (uniqueId >> 16) & 0xFF;
+                    regData[7] = (uniqueId >> 24) & 0xFF;
+                    
+                    canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8);
+                    LogMessage("Registered module ID " + IntToStr(moduleId) + 
+                              " (Unique: 0x" + IntToHex((int)uniqueId, 8) + ")");
+                    UpdateModuleList();
+                } else {
+                    LogMessage("Failed to register module");
+                }
             } else {
-                LogMessage("Failed to register module " + IntToStr(moduleId));
+                // Existing module re-announcing
+                LogMessage("Module " + IntToStr(moduleId) + " re-announced");
+                moduleManager->UpdateModuleStatus(moduleId, msg.data);
+                
+                // Send registration ACK again in case module lost it
+                uint8_t regData[8];
+                regData[0] = moduleId;
+                regData[1] = 0x01;
+                regData[2] = mfgId;
+                regData[3] = partId;
+                regData[4] = uniqueId & 0xFF;
+                regData[5] = (uniqueId >> 8) & 0xFF;
+                regData[6] = (uniqueId >> 16) & 0xFF;
+                regData[7] = (uniqueId >> 24) & 0xFF;
+                canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8);
             }
         } else {
-            // Module re-announcing (heartbeat or re-registration request)
-            LogMessage("Module " + IntToStr(moduleId) + " heartbeat received");
-            moduleManager->UpdateModuleStatus(moduleId, msg.data);
+            LogMessage("ERROR: Could not assign module ID (all 32 slots full?)");
         }
     }
     // Check for module status messages
