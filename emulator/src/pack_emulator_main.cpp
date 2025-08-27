@@ -258,7 +258,7 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
     static bool wasBroadcasting = false;
     heartbeatCounter++;
     
-    if (heartbeatCounter >= 10) {  // Every 1 second (100ms timer * 10)
+    if (heartbeatCounter >= 2) {  // Every 200ms (100ms timer * 2)
         heartbeatCounter = 0;
         
         std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();

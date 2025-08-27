@@ -1,0 +1,140 @@
+VERSION ""
+
+NS_ :
+	NS_DESC_
+	CM_
+	BA_DEF_
+	BA_
+	VAL_
+	BA_DEF_DEF_
+
+BS_:
+
+BU_ PackController Module
+
+BO_ 1280 MODULE_ANNOUNCEMENT: 8 Module
+ SG_ FirmwareVersion : 0|16@1+ (1,0) [0|65535] "" PackController
+ SG_ ManufacturerID : 16|8@1+ (1,0) [0|255] "" PackController
+ SG_ PartID : 24|8@1+ (1,0) [0|255] "" PackController
+ SG_ UniqueID : 32|32@1+ (1,0) [0|4294967295] "" PackController
+
+BO_ 1281 MODULE_HARDWARE: 8 Module
+ SG_ MaxChargeAmps : 0|16@1+ (0.1,0) [0|6553.5] "A" PackController
+ SG_ MaxDischargeAmps : 16|16@1+ (0.1,0) [0|6553.5] "A" PackController
+ SG_ MaxChargeEndVoltage : 32|16@1+ (0.01,0) [0|655.35] "V" PackController
+ SG_ HardwareVersion : 48|16@1+ (1,0) [0|65535] "" PackController
+
+BO_ 1282 MODULE_STATUS_1: 8 Module
+ SG_ ModuleState : 0|4@1+ (1,0) [0|15] "" PackController
+ SG_ ModuleStatus : 4|4@1+ (1,0) [0|15] "" PackController
+ SG_ ModuleSOC : 8|8@1+ (0.5,0) [0|100] "%" PackController
+ SG_ ModuleSOH : 16|8@1+ (0.5,0) [0|100] "%" PackController
+ SG_ CellCount : 24|8@1+ (1,0) [0|255] "" PackController
+ SG_ ModuleMeasuredCurrent : 32|16@1- (0.1,0) [-3276.8|3276.7] "A" PackController
+ SG_ ModuleMeasuredVoltage : 48|16@1+ (0.01,0) [0|655.35] "V" PackController
+
+BO_ 1283 MODULE_STATUS_2: 8 Module
+ SG_ MinCellVoltage : 0|16@1+ (0.001,0) [0|65.535] "V" PackController
+ SG_ MaxCellVoltage : 16|16@1+ (0.001,0) [0|65.535] "V" PackController
+ SG_ AvgCellVoltage : 32|16@1+ (0.001,0) [0|65.535] "V" PackController
+ SG_ TotalCellVoltage : 48|16@1+ (0.01,0) [0|655.35] "V" PackController
+
+BO_ 1284 MODULE_STATUS_3: 8 Module
+ SG_ MinCellTemperature : 0|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
+ SG_ MaxCellTemperature : 16|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
+ SG_ AvgCellTemperature : 32|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
+
+BO_ 1285 MODULE_DETAIL: 8 Module
+ SG_ CellID : 0|8@1+ (1,0) [0|255] "" PackController
+ SG_ CellCount : 8|8@1+ (1,0) [0|255] "" PackController
+ SG_ CellTemperature : 16|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
+ SG_ CellVoltage : 32|16@1+ (0.001,0) [0|65.535] "V" PackController
+ SG_ CellSOC : 48|8@1+ (0.5,0) [0|100] "%" PackController
+ SG_ CellSOH : 56|8@1+ (0.5,0) [0|100] "%" PackController
+
+BO_ 1286 MODULE_TIME_REQUEST: 0 Module
+
+BO_ 1296 MODULE_REGISTRATION: 8 PackController
+ SG_ AssignedModuleID : 0|8@1+ (1,0) [0|255] "" Module
+ SG_ ControllerID : 8|8@1+ (1,0) [0|255] "" Module
+ SG_ ManufacturerID : 16|8@1+ (1,0) [0|255] "" Module
+ SG_ PartID : 24|8@1+ (1,0) [0|255] "" Module
+ SG_ UniqueID : 32|32@1+ (1,0) [0|4294967295] "" Module
+
+BO_ 1297 MODULE_HW_REQUEST: 1 PackController
+ SG_ ModuleID : 0|8@1+ (1,0) [0|255] "" Module
+
+BO_ 1298 MODULE_STATUS_REQUEST: 1 PackController
+ SG_ ModuleID : 0|8@1+ (1,0) [0|255] "" Module
+
+BO_ 1300 MODULE_STATE_CHANGE: 4 PackController
+ SG_ ModuleID : 0|8@1+ (1,0) [0|255] "" Module
+ SG_ RequestedState : 8|4@1+ (1,0) [0|15] "" Module
+ SG_ HVBusVoltage : 16|16@1+ (0.1,0) [0|6553.5] "V" Module
+
+BO_ 1301 MODULE_DETAIL_REQUEST: 3 PackController
+ SG_ ModuleID : 0|8@1+ (1,0) [0|255] "" Module
+ SG_ CellID : 8|8@1+ (1,0) [0|255] "" Module
+
+BO_ 1302 MODULE_SET_TIME: 5 PackController
+ SG_ BroadcastMarker : 0|8@1+ (1,0) [0|255] "" Module
+ SG_ Timestamp : 8|32@1+ (1,0) [0|4294967295] "s" Module
+
+BO_ 1303 MODULE_MAX_STATE: 1 PackController
+ SG_ MaxAllowedState : 0|8@1+ (1,0) [0|15] "" Module
+
+BO_ 1304 MODULE_DEREGISTER: 2 PackController
+ SG_ ModuleID : 0|8@1+ (1,0) [0|255] "" Module
+ SG_ Reason : 8|8@1+ (1,0) [0|255] "" Module
+
+BO_ 1309 MODULE_ANNOUNCE_REQUEST: 1 PackController
+ SG_ RequestType : 0|8@1+ (1,0) [0|255] "" Module
+
+BO_ 1310 MODULE_ALL_DEREGISTER: 1 PackController
+ SG_ Reason : 0|8@1+ (1,0) [0|255] "" Module
+
+BO_ 1311 MODULE_ALL_ISOLATE: 1 PackController
+ SG_ Reason : 0|8@1+ (1,0) [0|255] "" Module
+
+CM_ BU_ PackController "Battery Pack Controller - manages up to 32 battery modules";
+CM_ BU_ Module "Battery Module - individual battery unit with cells";
+
+CM_ BO_ 1280 "Module announces itself to pack controller with unique ID (0x500)";
+CM_ BO_ 1281 "Module hardware capabilities response (0x501)";
+CM_ BO_ 1282 "Module primary status information (0x502)";
+CM_ BO_ 1283 "Module cell voltage statistics (0x503)";
+CM_ BO_ 1284 "Module cell temperature statistics (0x504)";
+CM_ BO_ 1285 "Detailed information for specific cell (0x505)";
+CM_ BO_ 1286 "Module requests current time (0x506)";
+CM_ BO_ 1296 "Pack controller assigns module ID after announcement (0x510)";
+CM_ BO_ 1297 "Request module hardware information (0x511)";
+CM_ BO_ 1298 "Request module status information (0x512)";
+CM_ BO_ 1300 "Command module to change state (0x514)";
+CM_ BO_ 1301 "Request detailed cell information (0x515)";
+CM_ BO_ 1302 "Broadcast current time to modules (0x516)";
+CM_ BO_ 1303 "Broadcast maximum allowed state - heartbeat every 200ms (0x517)";
+CM_ BO_ 1304 "Deregister specific module (0x518)";
+CM_ BO_ 1309 "Broadcast request for all modules to announce (0x51D)";
+CM_ BO_ 1310 "Deregister all modules (0x51E)";
+CM_ BO_ 1311 "Emergency isolate all modules (0x51F)";
+
+CM_ SG_ 1280 FirmwareVersion "Module firmware version number";
+CM_ SG_ 1280 ManufacturerID "Module manufacturer identification";
+CM_ SG_ 1280 PartID "Module part number/type";
+CM_ SG_ 1280 UniqueID "Globally unique module identifier";
+
+CM_ SG_ 1282 ModuleState "0=Off, 1=Standby, 2=Precharge, 3=On";
+CM_ SG_ 1282 ModuleStatus "Module status flags";
+CM_ SG_ 1282 ModuleSOC "State of Charge 0-100%";
+CM_ SG_ 1282 ModuleSOH "State of Health 0-100%";
+
+CM_ SG_ 1300 RequestedState "0=Off, 1=Standby, 2=Precharge, 3=On";
+CM_ SG_ 1303 MaxAllowedState "0=Off, 1=Standby, 2=Precharge, 3=On - sent as heartbeat";
+
+VAL_ 1282 ModuleState 0 "Off" 1 "Standby" 2 "Precharge" 3 "On";
+VAL_ 1300 RequestedState 0 "Off" 1 "Standby" 2 "Precharge" 3 "On";
+VAL_ 1303 MaxAllowedState 0 "Off" 1 "Standby" 2 "Precharge" 3 "On";
+
+BA_ "BusType" "" "CAN";
+BA_ "DBName" "" "ModBatt_Module_Pack_Interface";
+BA_ "DataRate" "" 500000;
