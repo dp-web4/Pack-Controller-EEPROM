@@ -492,7 +492,10 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                     regData[6] = (uniqueId >> 16) & 0xFF;
                     regData[7] = (uniqueId >> 24) & 0xFF;
                     
-                    canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8);
+                    if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8)) {
+                        LogMessage("Sent registration ACK on CAN ID 0x" + 
+                                  IntToHex((int)ID_MODULE_REGISTRATION, 3));
+                    }
                     LogMessage("Registered module ID " + IntToStr(moduleId) + 
                               " (Unique: 0x" + IntToHex((int)uniqueId, 8) + ")");
                     UpdateModuleList();
@@ -514,7 +517,10 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                 regData[5] = (uniqueId >> 8) & 0xFF;
                 regData[6] = (uniqueId >> 16) & 0xFF;
                 regData[7] = (uniqueId >> 24) & 0xFF;
-                canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8);
+                if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8)) {
+                    LogMessage("Re-sent registration ACK on CAN ID 0x" + 
+                              IntToHex((int)ID_MODULE_REGISTRATION, 3));
+                }
             }
         } else {
             LogMessage("ERROR: Could not assign module ID (all 32 slots full?)");
