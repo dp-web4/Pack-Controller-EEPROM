@@ -253,21 +253,45 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
         UpdateModuleDetails(selectedModuleId);
     }
     
-    // Send periodic heartbeat/keep-alive to registered modules
+    // Broadcast highest allowed state to all registered modules
     static int heartbeatCounter = 0;
+    static bool wasBroadcasting = false;
     heartbeatCounter++;
-    if (heartbeatCounter >= 50) {  // Every 5 seconds (100ms timer * 50)
+    
+    if (heartbeatCounter >= 10) {  // Every 1 second (100ms timer * 10)
         heartbeatCounter = 0;
         
-        // Send keep-alive to all registered modules
         std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
         if (!moduleIds.empty()) {
-            for (size_t i = 0; i < moduleIds.size(); i++) {
-                // Send keep-alive/heartbeat
-                uint8_t data[8] = {0x00};  // Simple heartbeat
-                canInterface->SendModuleCommand(moduleIds[i], 0xFE, data, 1);  // 0xFE = heartbeat command
+            // We have registered modules - send broadcast heartbeat
+            if (!wasBroadcasting) {
+                LogMessage("Started broadcasting max state to " + IntToStr((int)moduleIds.size()) + " module(s)");
+                wasBroadcasting = true;
             }
-            // Don't log each heartbeat to avoid spam
+            
+            // Send maximum allowed state broadcast (0x517)
+            // This tells all modules the highest state they're allowed to enter
+            uint8_t maxState = static_cast<uint8_t>(PackEmulator::ModuleState::ON);  // Allow up to ON state
+            uint8_t data[8] = {0};
+            data[0] = maxState;  // Maximum allowed state
+            
+            // Broadcast to all modules (use 0xFF as broadcast ID)
+            canInterface->SendMessage(ID_MODULE_MAX_STATE, data, 1);
+            
+            // Also send keep-alive/time sync
+            uint32_t timestamp = GetTickCount() / 1000;  // Seconds since boot
+            data[0] = 0xFF;  // Broadcast marker
+            data[1] = (timestamp >> 24) & 0xFF;
+            data[2] = (timestamp >> 16) & 0xFF;
+            data[3] = (timestamp >> 8) & 0xFF;
+            data[4] = timestamp & 0xFF;
+            canInterface->SendMessage(ID_MODULE_SET_TIME, data, 5);
+        } else {
+            // No registered modules - stop broadcasting
+            if (wasBroadcasting) {
+                LogMessage("Stopped broadcasting (no registered modules)");
+                wasBroadcasting = false;
+            }
         }
     }
 }
@@ -275,8 +299,18 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::TimeoutTimerTimer(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+    
+    // Store count before timeout check
+    size_t beforeCount = moduleManager->GetRegisteredModuleIds().size();
+    
     moduleManager->CheckTimeouts();
     moduleManager->CheckForFaults();
+    
+    // Check if any modules timed out
+    size_t afterCount = moduleManager->GetRegisteredModuleIds().size();
+    if (beforeCount > 0 && afterCount == 0) {
+        LogMessage("All modules timed out - stopping broadcasts");
+    }
     
     // Update module list to show timeout status
     UpdateModuleList();
