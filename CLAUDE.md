@@ -1,17 +1,24 @@
 # Claude Context for Pack-Controller-EEPROM
 
+## Git Authentication
+**Universal Push Command**:
+```bash
+grep GITHUB_PAT ../.env | cut -d= -f2 | xargs -I {} git push https://dp-web4:{}@github.com/dp-web4/Pack-Controller-EEPROM.git
+```
+See `../private-context/GIT_COMMANDS_CLAUDE.md` for details.
+
 ## Project Context System
 
-**IMPORTANT**: A comprehensive context system exists at `/mnt/c/projects/ai-agents/misc/context-system/`
+**IMPORTANT**: A comprehensive context system exists at `../misc/context-system/` (relative to project home)
 
-Quick access:
+Quick access from project home:
 ```bash
 # Get overview of battery hierarchy projects
-cd /mnt/c/projects/ai-agents/misc/context-system
+cd ../misc/context-system
 python3 query_context.py project pack-controller
 
 # See complete battery hierarchy
-cat /mnt/c/projects/ai-agents/misc/context-system/projects/battery-hierarchy.md
+cat projects/battery-hierarchy.md
 
 # Find integration points
 python3 query_context.py search "blockchain"
