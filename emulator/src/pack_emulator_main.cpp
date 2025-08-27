@@ -122,19 +122,29 @@ void __fastcall TMainForm::DisconnectButtonClick(TObject *Sender) {
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
-    moduleManager->StartDiscovery();
-    LogMessage("Module discovery started");
     
-    // Send announcement request
-    uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-    if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8)) {
-        LogMessage("Sent module discovery request (CAN ID 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + ")");
+    if (DiscoverButton->Tag == 0) {
+        // Start discovery
+        moduleManager->StartDiscovery();
+        LogMessage("Module discovery started");
+        
+        // Send announcement request to trigger all modules to announce
+        uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
+        if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8)) {
+            LogMessage("Broadcast discovery request (CAN ID 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + ")");
+        } else {
+            LogMessage("Failed to send discovery request: " + String(canInterface->GetLastError().c_str()));
+        }
+        
+        DiscoverButton->Caption = "Stop Discovery";
+        DiscoverButton->Tag = 1;
     } else {
-        LogMessage("Failed to send discovery request: " + String(canInterface->GetLastError().c_str()));
+        // Stop discovery
+        moduleManager->StopDiscovery();
+        LogMessage("Module discovery stopped");
+        DiscoverButton->Caption = "Start Discovery";
+        DiscoverButton->Tag = 0;
     }
-    
-    DiscoverButton->Caption = "Stop Discovery";
-    DiscoverButton->Tag = 1;  // Use tag to track state
 }
 
 //---------------------------------------------------------------------------
@@ -241,6 +251,24 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
     // Update selected module details
     if (selectedModuleId) {
         UpdateModuleDetails(selectedModuleId);
+    }
+    
+    // Send periodic heartbeat/keep-alive to registered modules
+    static int heartbeatCounter = 0;
+    heartbeatCounter++;
+    if (heartbeatCounter >= 50) {  // Every 5 seconds (100ms timer * 50)
+        heartbeatCounter = 0;
+        
+        // Send keep-alive to all registered modules
+        std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
+        if (!moduleIds.empty()) {
+            for (size_t i = 0; i < moduleIds.size(); i++) {
+                // Send keep-alive/heartbeat
+                uint8_t data[8] = {0x00};  // Simple heartbeat
+                canInterface->SendModuleCommand(moduleIds[i], 0xFE, data, 1);  // 0xFE = heartbeat command
+            }
+            // Don't log each heartbeat to avoid spam
+        }
     }
 }
 
@@ -406,11 +434,21 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         uint32_t uniqueId = (msg.data[4] << 24) | (msg.data[5] << 16) | 
                            (msg.data[6] << 8) | msg.data[7];
         
-        if (moduleManager->IsDiscoveryActive()) {
-            moduleManager->RegisterModule(moduleId, uniqueId);
-            canInterface->SendRegistrationAck(moduleId, true);
-            LogMessage("Discovered module " + IntToStr(moduleId));
-            UpdateModuleList();
+        // Always process module announcements - modules announce when they need registration
+        if (!moduleManager->IsModuleRegistered(moduleId)) {
+            // New module announcing itself
+            if (moduleManager->RegisterModule(moduleId, uniqueId)) {
+                canInterface->SendRegistrationAck(moduleId, true);
+                LogMessage("Registered module " + IntToStr(moduleId) + 
+                          " with ID 0x" + IntToHex((int)uniqueId, 8));
+                UpdateModuleList();
+            } else {
+                LogMessage("Failed to register module " + IntToStr(moduleId));
+            }
+        } else {
+            // Module re-announcing (heartbeat or re-registration request)
+            LogMessage("Module " + IntToStr(moduleId) + " heartbeat received");
+            moduleManager->UpdateModuleStatus(moduleId, msg.data);
         }
     }
     // Check for module status messages
