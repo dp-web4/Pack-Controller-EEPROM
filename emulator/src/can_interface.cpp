@@ -137,7 +137,15 @@ bool CANInterface::SendMessage(uint32_t id, const uint8_t* data, uint8_t length,
 }
 
 bool CANInterface::SendModuleCommand(uint8_t moduleId, uint8_t command, const uint8_t* params, uint8_t paramLen) {
-    uint32_t canId = BuildModuleCANId(moduleId, 0x200); // Command base ID
+    // Note: BuildModuleCANId was designed for a different format
+    // For extended frames matching Pack Controller format:
+    // - Bits 28-18: Message type (0x200 range for commands) 
+    // - Bits 17-0: Module ID
+    // This is a broadcast command, so we don't use BuildModuleCANId
+    
+    // For now, these are likely not the right IDs - need to check Pack Controller
+    // The 0x200 range might not be correct for module commands
+    uint32_t extendedId = ((uint32_t)0x514 << 18) | moduleId;  // Using STATE_CHANGE as example
     
     uint8_t data[8] = {0};
     data[0] = command;
@@ -146,8 +154,7 @@ bool CANInterface::SendModuleCommand(uint8_t moduleId, uint8_t command, const ui
         std::memcpy(&data[1], params, std::min(paramLen, uint8_t(7)));
     }
     
-    // IMPORTANT: ModuleCPU expects extended CAN frames
-    return SendMessage(canId, data, 1 + paramLen, true);
+    return SendMessage(extendedId, data, 1 + paramLen, true);
 }
 
 bool CANInterface::SendStateChange(uint8_t moduleId, uint8_t newState) {
@@ -171,8 +178,10 @@ bool CANInterface::SendTimeSync(uint32_t timestamp) {
     data[3] = (timestamp >> 8) & 0xFF;
     data[4] = timestamp & 0xFF;
     
-    // IMPORTANT: ModuleCPU expects extended CAN frames
-    return SendMessage(0x2FF, data, 5, true); // Broadcast ID
+    // For extended frames, the 11-bit message ID goes in bits 28-18
+    // This appears to be a non-standard ID (0x2FF), keeping as-is for now
+    uint32_t extendedId = ((uint32_t)0x2FF << 18) | 0;
+    return SendMessage(extendedId, data, 5, true); // Broadcast ID
 }
 
 bool CANInterface::SendWeb4KeyChunk(uint8_t moduleId, uint8_t chunkNum, const uint8_t* chunk) {

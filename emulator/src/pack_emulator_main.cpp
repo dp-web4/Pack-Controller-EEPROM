@@ -143,8 +143,9 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
         
         // Send announcement request to trigger all modules to announce
         uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-        // IMPORTANT: ModuleCPU expects extended CAN frames
-        if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8, true)) {
+        // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
+        uint32_t announceExtId = ((uint32_t)ID_MODULE_ANNOUNCE_REQUEST << 18) | 0;  // 0x51D -> 0x14740000
+        if (canInterface->SendMessage(announceExtId, data, 8, true)) {
             LogMessage("→ 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + 
                       " [Discovery Request] Broadcasting to all modules");
         } else {
@@ -291,8 +292,10 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             data[0] = maxState;  // Maximum allowed state
             
             // Broadcast to all modules (use 0xFF as broadcast ID)
-            // IMPORTANT: ModuleCPU expects extended CAN frames
-            if (canInterface->SendMessage(ID_MODULE_MAX_STATE, data, 1, true)) {
+            // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
+            // The 29-bit extended ID = (SID << 18) | EID
+            uint32_t heartbeatExtId = ((uint32_t)ID_MODULE_MAX_STATE << 18) | 0;  // 0x517 -> 0x145C0000
+            if (canInterface->SendMessage(heartbeatExtId, data, 1, true)) {
                 static int logCounter = 0;
                 logCounter++;
                 if (logCounter >= 25) {  // Log every 5 seconds (200ms * 25)
@@ -313,8 +316,9 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             data[2] = (timestamp >> 16) & 0xFF;
             data[3] = (timestamp >> 8) & 0xFF;
             data[4] = timestamp & 0xFF;
-            // IMPORTANT: ModuleCPU expects extended CAN frames
-            if (canInterface->SendMessage(ID_MODULE_SET_TIME, data, 5, true)) {
+            // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
+            uint32_t timeSyncExtId = ((uint32_t)ID_MODULE_SET_TIME << 18) | 0;  // 0x516 -> 0x14580000
+            if (canInterface->SendMessage(timeSyncExtId, data, 5, true)) {
                 static int timeLogCounter = 0;
                 timeLogCounter++;
                 if (timeLogCounter >= 50) {  // Log every 10 seconds
@@ -720,8 +724,10 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                     regData[6] = (uniqueId >> 16) & 0xFF;
                     regData[7] = (uniqueId >> 24) & 0xFF;
                     
-                    // IMPORTANT: ModuleCPU expects extended CAN frames
-                if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8, true)) {
+                    // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
+                // For registration, we include the module ID in the lower bits
+                uint32_t regExtId = ((uint32_t)ID_MODULE_REGISTRATION << 18) | moduleId;  // 0x510 -> 0x14400000 + moduleId
+                if (canInterface->SendMessage(regExtId, regData, 8, true)) {
                         LogMessage("→ 0x" + IntToHex((int)ID_MODULE_REGISTRATION, 3) + 
                                   " [Registration ACK] Assigned ID " + IntToStr(moduleId));
                     }
@@ -750,8 +756,10 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                 regData[5] = (uniqueId >> 8) & 0xFF;
                 regData[6] = (uniqueId >> 16) & 0xFF;
                 regData[7] = (uniqueId >> 24) & 0xFF;
-                // IMPORTANT: ModuleCPU expects extended CAN frames
-                if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8, true)) {
+                // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
+                // For registration, we include the module ID in the lower bits
+                uint32_t regExtId = ((uint32_t)ID_MODULE_REGISTRATION << 18) | moduleId;  // 0x510 -> 0x14400000 + moduleId
+                if (canInterface->SendMessage(regExtId, regData, 8, true)) {
                     LogMessage("Re-sent registration ACK on CAN ID 0x" + 
                               IntToHex((int)ID_MODULE_REGISTRATION, 3));
                 }
