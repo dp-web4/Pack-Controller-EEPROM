@@ -514,7 +514,7 @@ void TMainForm::UpdateStatusDisplay() {
     StatusBar->Panels->Items[2]->Text = "Modules: " + 
         IntToStr((int)registeredCount) + "/" + IntToStr((int)moduleCount);
         
-    // Update statistics with rate calculation
+    // Update statistics with rate calculation (now using separate panels)
     PackEmulator::CANInterface::Statistics stats = canInterface->GetStatistics();
     static uint32_t lastTxCount = 0;
     static uint32_t lastRxCount = 0;
@@ -529,12 +529,20 @@ void TMainForm::UpdateStatusDisplay() {
             float txRate = txDelta / deltaTime;
             float rxRate = rxDelta / deltaTime;
             
+            // Panel 3: TX stats (fixed width formatting)
             StatusBar->Panels->Items[3]->Text = 
-                "CAN: TX " + IntToStr((int)stats.messagesSent) + 
-                " (" + FloatToStrF(txRate, ffFixed, 4, 1) + "/s) " +
-                "RX " + IntToStr((int)stats.messagesReceived) + 
+                "TX: " + IntToStr((int)stats.messagesSent) + 
+                " (" + FloatToStrF(txRate, ffFixed, 4, 1) + "/s)";
+            
+            // Panel 4: RX stats (separate panel, no jumping)
+            StatusBar->Panels->Items[4]->Text = 
+                "RX: " + IntToStr((int)stats.messagesReceived) + 
                 " (" + FloatToStrF(rxRate, ffFixed, 4, 1) + "/s)";
         }
+    } else {
+        // Initial display
+        StatusBar->Panels->Items[3]->Text = "TX: " + IntToStr((int)stats.messagesSent) + " (0.0/s)";
+        StatusBar->Panels->Items[4]->Text = "RX: " + IntToStr((int)stats.messagesReceived) + " (0.0/s)";
     }
     
     lastTxCount = stats.messagesSent;

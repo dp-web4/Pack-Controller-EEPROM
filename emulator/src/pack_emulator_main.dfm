@@ -163,43 +163,52 @@ object MainForm: TMainForm
         ViewStyle = vsReport
         OnSelectItem = ModuleListViewSelectItem
       end
-      object DiscoverButton: TButton
-        Left = 8
-        Top = 453
-        Width = 65
-        Height = 25
-        Caption = 'Discover'
-        Enabled = False
+      object ButtonPanel: TPanel
+        Left = 2
+        Top = 447
+        Width = 444
+        Height = 41
+        Align = alBottom
+        BevelOuter = bvNone
         TabOrder = 1
-        OnClick = DiscoverButtonClick
-      end
-      object RegisterButton: TButton
-        Left = 79
-        Top = 453
-        Width = 65
-        Height = 25
-        Caption = 'Register'
-        Enabled = False
-        TabOrder = 2
-        OnClick = RegisterButtonClick
-      end
-      object DeregisterButton: TButton
-        Left = 150
-        Top = 453
-        Width = 65
-        Height = 25
-        Caption = 'Deregister'
-        TabOrder = 3
-        OnClick = DeregisterButtonClick
-      end
-      object DeregisterAllButton: TButton
-        Left = 221
-        Top = 453
-        Width = 65
-        Height = 25
-        Caption = 'Clear All'
-        TabOrder = 4
-        OnClick = DeregisterAllButtonClick
+        object DiscoverButton: TButton
+          Left = 8
+          Top = 8
+          Width = 65
+          Height = 25
+          Caption = 'Discover'
+          Enabled = False
+          TabOrder = 0
+          OnClick = DiscoverButtonClick
+        end
+        object RegisterButton: TButton
+          Left = 79
+          Top = 8
+          Width = 65
+          Height = 25
+          Caption = 'Register'
+          Enabled = False
+          TabOrder = 1
+          OnClick = RegisterButtonClick
+        end
+        object DeregisterButton: TButton
+          Left = 150
+          Top = 8
+          Width = 65
+          Height = 25
+          Caption = 'Deregister'
+          TabOrder = 2
+          OnClick = DeregisterButtonClick
+        end
+        object DeregisterAllButton: TButton
+          Left = 221
+          Top = 8
+          Width = 65
+          Height = 25
+          Caption = 'Clear All'
+          TabOrder = 3
+          OnClick = DeregisterAllButtonClick
+        end
       end
     end
   end
@@ -399,21 +408,30 @@ object MainForm: TMainForm
           ScrollBars = ssVertical
           TabOrder = 0
         end
-        object ClearHistoryButton: TButton
-          Left = 536
-          Top = 338
-          Width = 75
-          Height = 25
-          Caption = 'Clear'
+        object HistoryButtonPanel: TPanel
+          Left = 0
+          Top = 335
+          Width = 693
+          Height = 35
+          Align = alBottom
+          BevelOuter = bvNone
           TabOrder = 1
-        end
-        object ExportHistoryButton: TButton
-          Left = 617
-          Top = 338
-          Width = 75
-          Height = 25
-          Caption = 'Export'
-          TabOrder = 2
+          object ClearHistoryButton: TButton
+            Left = 536
+            Top = 5
+            Width = 75
+            Height = 25
+            Caption = 'Clear'
+            TabOrder = 0
+          end
+          object ExportHistoryButton: TButton
+            Left = 617
+            Top = 5
+            Width = 75
+            Height = 25
+            Caption = 'Export'
+            TabOrder = 1
+          end
         end
       end
       object Web4Tab: TTabSheet
@@ -495,11 +513,12 @@ object MainForm: TMainForm
           Width = 100
         end
         item
-          Text = 'TX: 0 RX: 0'
-          Width = 200
+          Text = 'TX: 0 (0.0/s)'
+          Width = 150
         end
         item
-          Width = 50
+          Text = 'RX: 0 (0.0/s)'
+          Width = 150
         end>
     end
   end
