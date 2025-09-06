@@ -8,6 +8,11 @@
 #include <sstream>
 #include <iomanip>
 
+// Windows message for scrolling edit controls
+#ifndef EM_LINESCROLL
+#define EM_LINESCROLL 0x00B6
+#endif
+
 //---------------------------------------------------------------------------
 #pragma package(smart_init)
 #pragma resource "*.dfm"
@@ -29,6 +34,14 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     
     // Set up CAN callback
     canInterface->SetCallback(this);
+    
+    // Connect button events (if not connected in form designer)
+    if (ClearHistoryButton) {
+        ClearHistoryButton->OnClick = ClearHistoryButtonClick;
+    }
+    if (ExportHistoryButton) {
+        ExportHistoryButton->OnClick = ExportHistoryButtonClick;
+    }
     
     // Initialize UI
     UpdateConnectionStatus(false);
@@ -131,9 +144,10 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
         // Send announcement request to trigger all modules to announce
         uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
         if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8)) {
-            LogMessage("Broadcast discovery request (CAN ID 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + ")");
+            LogMessage("→ 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + 
+                      " [Discovery Request] Broadcasting to all modules");
         } else {
-            LogMessage("Failed to send discovery request: " + String(canInterface->GetLastError().c_str()));
+            LogMessage("✗ Failed to send discovery request: " + String(canInterface->GetLastError().c_str()));
         }
         
         DiscoverButton->Caption = "Stop Discovery";
@@ -317,6 +331,26 @@ void __fastcall TMainForm::TimeoutTimerTimer(TObject *Sender) {
 }
 
 //---------------------------------------------------------------------------
+void __fastcall TMainForm::ClearHistoryButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    HistoryMemo->Lines->Clear();
+    LogMessage("History cleared");
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::ExportHistoryButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    if (SaveDialog->Execute()) {
+        try {
+            HistoryMemo->Lines->SaveToFile(SaveDialog->FileName);
+            LogMessage("History exported to " + SaveDialog->FileName);
+        } catch (...) {
+            ShowError("Failed to export history");
+        }
+    }
+}
+
+//---------------------------------------------------------------------------
 void __fastcall TMainForm::DistributeKeysButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
     if (!selectedModuleId) {
@@ -370,21 +404,65 @@ void TMainForm::UpdateModuleList() {
         PackEmulator::ModuleInfo* module = modules[i];
         TListItem* item = ModuleListView->Items->Add();
         item->Caption = IntToStr(module->moduleId);
-        item->SubItems->Add(module->isRegistered ? "Registered" : "Discovered");
-        item->SubItems->Add(module->isResponding ? "OK" : "Timeout");
+        
+        // Add unique ID column
+        String uniqueIdStr = "0x" + IntToHex((int)module->uniqueId, 8);
+        item->SubItems->Add(uniqueIdStr);
+        
+        // Use compact status indicators
+        item->SubItems->Add(module->isRegistered ? "REG" : "---");
+        item->SubItems->Add(module->isResponding ? "OK" : "T/O");
         
         String stateStr;
+        TColor stateColor = clBlack;
         switch (module->state) {
-            case PackEmulator::ModuleState::OFF: stateStr = "Off"; break;
-            case PackEmulator::ModuleState::STANDBY: stateStr = "Standby"; break;
-            case PackEmulator::ModuleState::PRECHARGE: stateStr = "Precharge"; break;
-            case PackEmulator::ModuleState::ON: stateStr = "On"; break;
-            default: stateStr = "Unknown";
+            case PackEmulator::ModuleState::OFF: 
+                stateStr = "Off"; 
+                stateColor = clGray;
+                break;
+            case PackEmulator::ModuleState::STANDBY: 
+                stateStr = "Standby"; 
+                stateColor = clBlue;
+                break;
+            case PackEmulator::ModuleState::PRECHARGE: 
+                stateStr = "Precharge"; 
+                stateColor = clOlive;
+                break;
+            case PackEmulator::ModuleState::ON: 
+                stateStr = "On"; 
+                stateColor = clGreen;
+                break;
+            default: 
+                stateStr = "Unknown";
+                stateColor = clRed;
         }
         item->SubItems->Add(stateStr);
         
-        item->SubItems->Add(FloatToStrF(module->voltage, ffFixed, 7, 2) + "V");
-        item->SubItems->Add(FloatToStrF(module->soc, ffFixed, 7, 1) + "%");
+        // Store color info in Data pointer for custom drawing
+        item->Data = (void*)stateColor;
+        
+        // Add voltage with color coding for abnormal values
+        float voltage = module->voltage;
+        String voltageStr = FloatToStrF(voltage, ffFixed, 7, 2) + "V";
+        item->SubItems->Add(voltageStr);
+        
+        // Add SOC with color coding
+        float soc = module->soc;
+        String socStr = FloatToStrF(soc, ffFixed, 7, 1) + "%";
+        item->SubItems->Add(socStr);
+        
+        // Add cell count
+        size_t cellCount = module->cellVoltages.size();
+        if (cellCount == 0) {
+            item->SubItems->Add("-");
+        } else {
+            item->SubItems->Add(IntToStr((int)cellCount));
+        }
+        
+        // Color the entire row based on module status
+        if (!module->isResponding) {
+            item->ImageIndex = -1;  // Could use for icon if we had an ImageList
+        }
     }
     
     ModuleListView->Items->EndUpdate();
@@ -395,6 +473,10 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     if (module == NULL) {
         return;
     }
+    
+    // Update window title with selected module info
+    Caption = "Pack Controller Emulator - Module " + IntToStr(moduleId) + 
+              " (0x" + IntToHex((int)module->uniqueId, 8) + ")";
     
     // Update status labels
     VoltageLabel->Caption = "Voltage: " + FloatToStrF(module->voltage, ffFixed, 7, 2) + " V";
@@ -408,18 +490,56 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
 }
 
 void TMainForm::UpdateStatusDisplay() {
-    // Update pack-level values
+    // Update pack-level values with better formatting
+    float packVoltage = moduleManager->GetPackVoltage();
+    float packCurrent = moduleManager->GetPackCurrent();
+    size_t moduleCount = moduleManager->GetModuleCount();
+    size_t registeredCount = moduleManager->GetRegisteredModuleIds().size();
+    
     StatusBar->Panels->Items[0]->Text = "Pack: " + 
-        FloatToStrF(moduleManager->GetPackVoltage(), ffFixed, 7, 1) + "V";
-    StatusBar->Panels->Items[1]->Text = "Current: " + 
-        FloatToStrF(moduleManager->GetPackCurrent(), ffFixed, 7, 1) + "A";
+        FloatToStrF(packVoltage, ffFixed, 7, 1) + "V";
+    
+    // Show current with direction indicator
+    String currentStr = "Current: ";
+    if (packCurrent > 0.1f) {
+        currentStr += "→ " + FloatToStrF(packCurrent, ffFixed, 7, 1) + "A";  // Discharge
+    } else if (packCurrent < -0.1f) {
+        currentStr += "← " + FloatToStrF(-packCurrent, ffFixed, 7, 1) + "A";  // Charge
+    } else {
+        currentStr += FloatToStrF(packCurrent, ffFixed, 7, 1) + "A";
+    }
+    StatusBar->Panels->Items[1]->Text = currentStr;
+    
+    // Show registered vs discovered modules
     StatusBar->Panels->Items[2]->Text = "Modules: " + 
-        IntToStr((int)moduleManager->GetModuleCount());
+        IntToStr((int)registeredCount) + "/" + IntToStr((int)moduleCount);
         
-    // Update statistics
+    // Update statistics with rate calculation
     PackEmulator::CANInterface::Statistics stats = canInterface->GetStatistics();
-    StatusBar->Panels->Items[3]->Text = "TX: " + IntToStr((int)stats.messagesSent) + 
-                                        " RX: " + IntToStr((int)stats.messagesReceived);
+    static uint32_t lastTxCount = 0;
+    static uint32_t lastRxCount = 0;
+    static DWORD lastUpdateTime = 0;
+    
+    DWORD currentTime = GetTickCount();
+    if (lastUpdateTime != 0 && currentTime > lastUpdateTime) {
+        float deltaTime = (currentTime - lastUpdateTime) / 1000.0f;
+        if (deltaTime > 0) {
+            uint32_t txDelta = stats.messagesSent - lastTxCount;
+            uint32_t rxDelta = stats.messagesReceived - lastRxCount;
+            float txRate = txDelta / deltaTime;
+            float rxRate = rxDelta / deltaTime;
+            
+            StatusBar->Panels->Items[3]->Text = 
+                "CAN: TX " + IntToStr((int)stats.messagesSent) + 
+                " (" + FloatToStrF(txRate, ffFixed, 4, 1) + "/s) " +
+                "RX " + IntToStr((int)stats.messagesReceived) + 
+                " (" + FloatToStrF(rxRate, ffFixed, 4, 1) + "/s)";
+        }
+    }
+    
+    lastTxCount = stats.messagesSent;
+    lastRxCount = stats.messagesReceived;
+    lastUpdateTime = currentTime;
 }
 
 void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
@@ -442,11 +562,22 @@ void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
 
 void TMainForm::UpdateConnectionStatus(bool connected) {
     if (connected) {
-        ConnectionStatusLabel->Caption = "Connected";
+        ConnectionStatusLabel->Caption = "● Connected";
         ConnectionStatusLabel->Font->Color = clGreen;
+        ConnectionStatusLabel->Font->Style = TFontStyles() << fsBold;
+        
+        // Update window title if no module selected
+        if (selectedModuleId == 0) {
+            Caption = "Pack Controller Emulator - Connected";
+        }
     } else {
-        ConnectionStatusLabel->Caption = "Disconnected";
+        ConnectionStatusLabel->Caption = "○ Disconnected";
         ConnectionStatusLabel->Font->Color = clRed;
+        ConnectionStatusLabel->Font->Style = TFontStyles();
+        
+        // Update window title
+        Caption = "Pack Controller Emulator - Disconnected";
+        selectedModuleId = 0;  // Clear selection on disconnect
     }
 }
 
@@ -454,12 +585,44 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     // Process message based on ID
     uint32_t canId = msg.id & 0x7FF;
     
-    // Debug: Log all received messages
+    // Format data string with better spacing
     String dataStr;
     for (int i = 0; i < msg.length; i++) {
+        if (i > 0 && i % 4 == 0) dataStr += "| ";  // Group bytes for readability
         dataStr += IntToHex((int)msg.data[i], 2) + " ";
     }
-    LogMessage("RX CAN ID 0x" + IntToHex((int)canId, 3) + " Data: " + dataStr);
+    
+    // Add message description based on CAN ID
+    String description;
+    switch (canId) {
+        case ID_MODULE_ANNOUNCEMENT:
+        case 0x000:  // Module firmware bug
+            description = " [Module Announce]";
+            break;
+        case ID_MODULE_STATUS_1:
+            description = " [Status 1]";
+            break;
+        case ID_MODULE_STATUS_2:
+            description = " [Status 2]";
+            break;
+        case ID_MODULE_STATUS_3:
+            description = " [Status 3]";
+            break;
+        case ID_MODULE_DETAIL:
+            description = " [Module Detail]";
+            break;
+        case ID_MODULE_CELL_VOLTAGE:
+            description = " [Cell Voltage]";
+            break;
+        case ID_MODULE_CELL_TEMP:
+            description = " [Cell Temp]";
+            break;
+        default:
+            description = "";
+    }
+    
+    LogMessage("← 0x" + IntToHex((int)canId, 3) + description + " [" + 
+               IntToStr(msg.length) + "] " + dataStr);
     
     // Check for module announcements (0x500 or 0x000 for compatibility)
     // Module firmware bug: sending on 0x000 instead of 0x500
@@ -527,10 +690,10 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                     regData[7] = (uniqueId >> 24) & 0xFF;
                     
                     if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8)) {
-                        LogMessage("Sent registration ACK on CAN ID 0x" + 
-                                  IntToHex((int)ID_MODULE_REGISTRATION, 3));
+                        LogMessage("→ 0x" + IntToHex((int)ID_MODULE_REGISTRATION, 3) + 
+                                  " [Registration ACK] Assigned ID " + IntToStr(moduleId));
                     }
-                    LogMessage("Registered module ID " + IntToStr(moduleId) + 
+                    LogMessage("✓ Registered module ID " + IntToStr(moduleId) + 
                               " (Unique: 0x" + IntToHex((int)uniqueId, 8) + ")");
                     UpdateModuleList();
                 } else {
@@ -599,10 +762,41 @@ void TMainForm::OnCANError(uint32_t errorCode, const std::string& errorMsg) {
 void TMainForm::ProcessModuleStatus(uint8_t moduleId, const uint8_t* data) {
     moduleManager->UpdateModuleStatus(moduleId, data);
     
-    // Parse additional status data
-    float voltage = ((data[2] << 8) | data[3]) * 0.01f;
+    // Parse MODULE_STATUS_1 according to DBC:
+    // Byte 0: ModuleState (bits 0-3) and ModuleStatus (bits 4-7)
+    // Byte 1: ModuleSOC (0.5% per bit)
+    // Byte 2: ModuleSOH (0.5% per bit)
+    // Byte 3: CellCount (direct value, no conversion needed)
+    // Bytes 4-5: ModuleMeasuredCurrent (signed, 0.1A per bit)
+    // Bytes 6-7: ModuleMeasuredVoltage (0.01V per bit)
+    
+    uint8_t cellCount = data[3];  // Direct byte value, no increment
+    float voltage = ((data[6] << 8) | data[7]) * 0.01f;
     float current = ((int16_t)((data[4] << 8) | data[5])) * 0.1f;
-    float temp = data[6] - 40.0f;
+    float soc = data[1] * 0.5f;
+    float soh = data[2] * 0.5f;
+    
+    // Debug log to check cell count (only log if it's non-zero)
+    if (cellCount > 0) {
+        LogMessage("Module " + IntToStr(moduleId) + " STATUS_1: CellCount=" + IntToStr(cellCount) + 
+                   " (raw byte[3]=0x" + IntToHex(data[3], 2) + ")");
+    }
+    
+    // Update module with parsed data
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        module->soc = soc;
+        module->soh = soh;
+        
+        // Initialize cell arrays if cell count changed
+        if (module->cellVoltages.size() != cellCount) {
+            module->cellVoltages.resize(cellCount, 3.2f);  // Default 3.2V per cell
+            module->cellTemperatures.resize(cellCount, 25.0f);  // Default 25°C
+        }
+    }
+    
+    // Temperature isn't in STATUS_1, so we'll keep a default
+    float temp = 25.0f;  // Default temp
     
     moduleManager->UpdateModuleElectrical(moduleId, voltage, current, temp);
 }
@@ -660,6 +854,14 @@ void TMainForm::LogMessage(const String& msg) {
     while (HistoryMemo->Lines->Count > 1000) {
         HistoryMemo->Lines->Delete(0);
     }
+    
+    // Auto-scroll to bottom to show most recent message
+    // SendMessage scrolls the memo to the end
+    SendMessage(HistoryMemo->Handle, EM_LINESCROLL, 0, HistoryMemo->Lines->Count);
+    
+    // Alternative method: Set selection to end
+    HistoryMemo->SelStart = HistoryMemo->Text.Length();
+    HistoryMemo->SelLength = 0;
 }
 
 void TMainForm::ShowError(const String& msg) {

@@ -76,9 +76,10 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.soc = 0.0f;
     module.soh = 100.0f;
     
-    // Initialize cell arrays (assume 14 cells per module as typical)
-    module.cellVoltages.resize(14, 0.0f);
-    module.cellTemperatures.resize(14, 25.0f);
+    // Don't initialize cell arrays - wait for actual cell count from MODULE_STATUS_1
+    // module.cellVoltages will be empty (size 0) until we receive the status message
+    module.cellVoltages.clear();
+    module.cellTemperatures.clear();
     
     modules[moduleId] = module;
     return true;

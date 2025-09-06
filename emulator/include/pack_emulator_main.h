@@ -132,6 +132,8 @@ __published:	// IDE-managed Components
     void __fastcall UpdateTimerTimer(TObject *Sender);
     void __fastcall TimeoutTimerTimer(TObject *Sender);
     void __fastcall DistributeKeysButtonClick(TObject *Sender);
+    void __fastcall ClearHistoryButtonClick(TObject *Sender);
+    void __fastcall ExportHistoryButtonClick(TObject *Sender);
     void __fastcall ExportDataItemClick(TObject *Sender);
     void __fastcall ExitItemClick(TObject *Sender);
     void __fastcall FormCreate(TObject *Sender);

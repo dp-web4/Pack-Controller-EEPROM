@@ -20,19 +20,19 @@ object MainForm: TMainForm
     Left = 0
     Top = 0
     Width = 1000
-    Height = 89
+    Height = 45
     Align = alTop
     TabOrder = 0
     object ConnectionGroup: TGroupBox
       Left = 8
-      Top = 8
-      Width = 385
-      Height = 73
+      Top = 4
+      Width = 600
+      Height = 37
       Caption = ' CAN Connection '
       TabOrder = 0
       object ConnectionStatusLabel: TLabel
-        Left = 272
-        Top = 28
+        Left = 505
+        Top = 15
         Width = 69
         Height = 13
         Caption = 'Disconnected'
@@ -45,8 +45,8 @@ object MainForm: TMainForm
       end
       object CANChannelCombo: TComboBox
         Left = 16
-        Top = 24
-        Width = 121
+        Top = 12
+        Width = 110
         Height = 21
         Style = csDropDownList
         ItemIndex = 0
@@ -59,9 +59,9 @@ object MainForm: TMainForm
           'PCAN-USB 4')
       end
       object BaudrateCombo: TComboBox
-        Left = 16
-        Top = 48
-        Width = 121
+        Left = 130
+        Top = 12
+        Width = 90
         Height = 21
         Style = csDropDownList
         ItemIndex = 2
@@ -74,19 +74,19 @@ object MainForm: TMainForm
           '1 MBit/s')
       end
       object ConnectButton: TButton
-        Left = 152
-        Top = 22
-        Width = 75
-        Height = 25
+        Left = 225
+        Top = 11
+        Width = 65
+        Height = 23
         Caption = 'Connect'
         TabOrder = 2
         OnClick = ConnectButtonClick
       end
       object DisconnectButton: TButton
-        Left = 152
-        Top = 48
+        Left = 295
+        Top = 11
         Width = 75
-        Height = 25
+        Height = 23
         Caption = 'Disconnect'
         Enabled = False
         TabOrder = 3
@@ -96,15 +96,15 @@ object MainForm: TMainForm
   end
   object LeftPanel: TPanel
     Left = 0
-    Top = 89
-    Width = 297
-    Height = 492
+    Top = 45
+    Width = 450
+    Height = 536
     Align = alLeft
     TabOrder = 1
     object ModulesGroup: TGroupBox
       Left = 1
       Top = 1
-      Width = 295
+      Width = 448
       Height = 490
       Align = alClient
       Caption = ' Battery Modules '
@@ -112,33 +112,49 @@ object MainForm: TMainForm
       object ModuleListView: TListView
         Left = 2
         Top = 15
-        Width = 291
+        Width = 444
         Height = 432
         Align = alClient
         Columns = <
           item
+            AutoSize = True
             Caption = 'ID'
-            Width = 40
+            MinWidth = 30
           end
           item
+            AutoSize = True
+            Caption = 'Unique ID'
+            MinWidth = 80
+          end
+          item
+            AutoSize = True
             Caption = 'Status'
-            Width = 70
+            MinWidth = 40
           end
           item
+            AutoSize = True
             Caption = 'Comm'
-            Width = 50
+            MinWidth = 35
           end
           item
+            AutoSize = True
             Caption = 'State'
-            Width = 60
+            MinWidth = 60
           end
           item
+            AutoSize = True
             Caption = 'Voltage'
-            Width = 60
+            MinWidth = 60
           end
           item
+            AutoSize = True
             Caption = 'SOC'
-            Width = 45
+            MinWidth = 45
+          end
+          item
+            AutoSize = True
+            Caption = 'CLS'
+            MinWidth = 35
           end>
         GridLines = True
         ReadOnly = True
@@ -188,10 +204,10 @@ object MainForm: TMainForm
     end
   end
   object CenterPanel: TPanel
-    Left = 297
-    Top = 89
-    Width = 703
-    Height = 492
+    Left = 450
+    Top = 45
+    Width = 550
+    Height = 536
     Align = alClient
     TabOrder = 2
     object ControlGroup: TGroupBox
