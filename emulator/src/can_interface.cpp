@@ -146,7 +146,8 @@ bool CANInterface::SendModuleCommand(uint8_t moduleId, uint8_t command, const ui
         std::memcpy(&data[1], params, std::min(paramLen, uint8_t(7)));
     }
     
-    return SendMessage(canId, data, 1 + paramLen);
+    // IMPORTANT: ModuleCPU expects extended CAN frames
+    return SendMessage(canId, data, 1 + paramLen, true);
 }
 
 bool CANInterface::SendStateChange(uint8_t moduleId, uint8_t newState) {
@@ -170,14 +171,15 @@ bool CANInterface::SendTimeSync(uint32_t timestamp) {
     data[3] = (timestamp >> 8) & 0xFF;
     data[4] = timestamp & 0xFF;
     
-    return SendMessage(0x2FF, data, 5); // Broadcast ID
+    // IMPORTANT: ModuleCPU expects extended CAN frames
+    return SendMessage(0x2FF, data, 5, true); // Broadcast ID
 }
 
 bool CANInterface::SendWeb4KeyChunk(uint8_t moduleId, uint8_t chunkNum, const uint8_t* chunk) {
     uint32_t canId = BuildModuleCANId(moduleId, 0x260); // Web4 base ID
     canId = SetExtendedIdBits(canId, chunkNum); // Add chunk number to extended bits
     
-    return SendMessage(canId, chunk, 8, true); // Extended ID for chunking
+    return SendMessage(canId, chunk, 8, true); // Already using extended ID for chunking
 }
 
 void CANInterface::SetFilterForModules(uint32_t baseId, uint32_t mask) {

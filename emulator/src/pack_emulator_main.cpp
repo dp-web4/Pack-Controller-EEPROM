@@ -143,7 +143,8 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
         
         // Send announcement request to trigger all modules to announce
         uint8_t data[8] = {0xFF, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00};
-        if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8)) {
+        // IMPORTANT: ModuleCPU expects extended CAN frames
+        if (canInterface->SendMessage(ID_MODULE_ANNOUNCE_REQUEST, data, 8, true)) {
             LogMessage("→ 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + 
                       " [Discovery Request] Broadcasting to all modules");
         } else {
@@ -290,7 +291,20 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             data[0] = maxState;  // Maximum allowed state
             
             // Broadcast to all modules (use 0xFF as broadcast ID)
-            canInterface->SendMessage(ID_MODULE_MAX_STATE, data, 1);
+            // IMPORTANT: ModuleCPU expects extended CAN frames
+            if (canInterface->SendMessage(ID_MODULE_MAX_STATE, data, 1, true)) {
+                static int logCounter = 0;
+                logCounter++;
+                if (logCounter >= 25) {  // Log every 5 seconds (200ms * 25)
+                    LogMessage("→ 0x" + IntToHex((int)ID_MODULE_MAX_STATE, 3) + 
+                              " [Heartbeat/MaxState] State=" + IntToStr(maxState) + 
+                              " (0x" + IntToHex(data[0], 2) + ") to " + 
+                              IntToStr((int)moduleIds.size()) + " module(s)");
+                    logCounter = 0;
+                }
+            } else {
+                LogMessage("✗ Failed to send heartbeat 0x517!");
+            }
             
             // Also send keep-alive/time sync
             uint32_t timestamp = GetTickCount() / 1000;  // Seconds since boot
@@ -299,7 +313,16 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             data[2] = (timestamp >> 16) & 0xFF;
             data[3] = (timestamp >> 8) & 0xFF;
             data[4] = timestamp & 0xFF;
-            canInterface->SendMessage(ID_MODULE_SET_TIME, data, 5);
+            // IMPORTANT: ModuleCPU expects extended CAN frames
+            if (canInterface->SendMessage(ID_MODULE_SET_TIME, data, 5, true)) {
+                static int timeLogCounter = 0;
+                timeLogCounter++;
+                if (timeLogCounter >= 50) {  // Log every 10 seconds
+                    LogMessage("→ 0x" + IntToHex((int)ID_MODULE_SET_TIME, 3) + 
+                              " [Time Sync] Timestamp=" + IntToStr((int)timestamp) + "s");
+                    timeLogCounter = 0;
+                }
+            }
         } else {
             // No registered modules - stop broadcasting
             if (wasBroadcasting) {
@@ -697,12 +720,17 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                     regData[6] = (uniqueId >> 16) & 0xFF;
                     regData[7] = (uniqueId >> 24) & 0xFF;
                     
-                    if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8)) {
+                    // IMPORTANT: ModuleCPU expects extended CAN frames
+                if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8, true)) {
                         LogMessage("→ 0x" + IntToHex((int)ID_MODULE_REGISTRATION, 3) + 
                                   " [Registration ACK] Assigned ID " + IntToStr(moduleId));
                     }
                     LogMessage("✓ Registered module ID " + IntToStr(moduleId) + 
                               " (Unique: 0x" + IntToHex((int)uniqueId, 8) + ")");
+                    
+                    // Debug: Show what we're comparing for heartbeat
+                    LogMessage("  Module will filter: RegID=" + IntToStr(moduleId) + 
+                              " vs Heartbeat byte[0]=" + IntToStr(3) + " (ON state)");
                     UpdateModuleList();
                 } else {
                     LogMessage("Failed to register module");
@@ -722,7 +750,8 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                 regData[5] = (uniqueId >> 8) & 0xFF;
                 regData[6] = (uniqueId >> 16) & 0xFF;
                 regData[7] = (uniqueId >> 24) & 0xFF;
-                if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8)) {
+                // IMPORTANT: ModuleCPU expects extended CAN frames
+                if (canInterface->SendMessage(ID_MODULE_REGISTRATION, regData, 8, true)) {
                     LogMessage("Re-sent registration ACK on CAN ID 0x" + 
                               IntToHex((int)ID_MODULE_REGISTRATION, 3));
                 }
