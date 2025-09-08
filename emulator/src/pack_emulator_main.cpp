@@ -936,15 +936,22 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
     // Byte 1: ModuleSOC (0.5% per bit)
     // Byte 2: ModuleSOH (0.5% per bit)
     // Byte 3: CellCount (direct value, no conversion needed)
-    // Bytes 4-5: ModuleMeasuredCurrent (signed, 0.1A per bit)
-    // Bytes 6-7: ModuleMeasuredVoltage (0.01V per bit)
+    // Bytes 4-5: moduleMmc = ModuleMeasuredCurrent (16 bits, signed, 0.1A per bit)
+    // Bytes 6-7: moduleMmv = ModuleMeasuredVoltage (16 bits, MODULE_VOLTAGE_FACTOR = 0.015V per bit)
     
     uint8_t stateAndStatus = data[0];
     uint8_t moduleState = stateAndStatus & 0x0F;  // Lower 4 bits
     uint8_t moduleStatus = (stateAndStatus >> 4) & 0x0F;  // Upper 4 bits
     uint8_t cellCount = data[3];  // Direct byte value, no increment
-    float voltage = ((data[6] << 8) | data[7]) * 0.01f;
-    float current = ((int16_t)((data[4] << 8) | data[5])) * 0.1f;
+    
+    // Current is in bytes 4-5 (moduleMmc field)
+    int16_t currentRaw = (data[4] << 8) | data[5];
+    float current = currentRaw * 0.1f;  // 0.1A per bit
+    
+    // Voltage is in bytes 6-7 (moduleMmv field)  
+    uint16_t voltageRaw = (data[6] << 8) | data[7];
+    float voltage = voltageRaw * 0.015f;  // MODULE_VOLTAGE_FACTOR = 0.015V per bit
+    
     float soc = data[1] * 0.5f;
     float soh = data[2] * 0.5f;
     
@@ -1039,7 +1046,7 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
     // Bytes 0-1: cellLoVolt (16 bits, 0.001V per bit)
     // Bytes 2-3: cellHiVolt (16 bits, 0.001V per bit)
     // Bytes 4-5: cellAvgVolt (16 bits, 0.001V per bit)
-    // Bytes 6-7: cellTotalV (16 bits, 0.01V per bit)
+    // Bytes 6-7: cellTotalV (16 bits, 0.015V per bit per eeprom_data.h)
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
@@ -1048,11 +1055,11 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
         uint16_t avgVolt = (data[4] << 8) | data[5];
         uint16_t totalVolt = (data[6] << 8) | data[7];
         
-        // Store min/max/avg cell voltages (converting from mV to V)
-        module->minCellVoltage = loVolt * 0.001f;
-        module->maxCellVoltage = hiVolt * 0.001f;
-        module->avgCellVoltage = avgVolt * 0.001f;
-        module->totalCellVoltage = totalVolt * 0.01f;
+        // Store min/max/avg cell voltages using correct scaling factors
+        module->minCellVoltage = loVolt * 0.001f;   // CELL_VOLTAGE_FACTOR
+        module->maxCellVoltage = hiVolt * 0.001f;   // CELL_VOLTAGE_FACTOR
+        module->avgCellVoltage = avgVolt * 0.001f;  // CELL_VOLTAGE_FACTOR
+        module->totalCellVoltage = totalVolt * 0.015f; // CELL_TOTAL_VOLTAGE_FACTOR
         
         // Log only occasionally to avoid spam
         static int status2Count = 0;
@@ -1066,10 +1073,11 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
 
 void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
     // Parse MODULE_STATUS_3 according to can_frm_mod.h:
-    // Bytes 0-1: cellLoTemp (16 bits, 0.1°C per bit, offset -273.15)
-    // Bytes 2-3: cellHiTemp (16 bits, 0.1°C per bit, offset -273.15)
-    // Bytes 4-5: cellAvgTemp (16 bits, 0.1°C per bit, offset -273.15)
+    // Bytes 0-1: cellLoTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit)
+    // Bytes 2-3: cellHiTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit)
+    // Bytes 4-5: cellAvgTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit)
     // Bytes 6-7: UNUSED
+    // Note: Temperatures are already in Celsius, no Kelvin offset needed for module messages
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
@@ -1077,10 +1085,11 @@ void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
         uint16_t hiTemp = (data[2] << 8) | data[3];
         uint16_t avgTemp = (data[4] << 8) | data[5];
         
-        // Convert from 0.1°K to °C (subtract 273.15)
-        module->minCellTemp = (loTemp * 0.1f) - 273.15f;
-        module->maxCellTemp = (hiTemp * 0.1f) - 273.15f;
-        module->avgCellTemp = (avgTemp * 0.1f) - 273.15f;
+        // Convert using TEMPERATURE_FACTOR (0.01°C per bit)
+        // Temperatures are already in Celsius for module messages
+        module->minCellTemp = loTemp * 0.01f;
+        module->maxCellTemp = hiTemp * 0.01f;
+        module->avgCellTemp = avgTemp * 0.01f;
         
         // Update the main temperature with average
         module->temperature = module->avgCellTemp;
