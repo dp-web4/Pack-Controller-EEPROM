@@ -945,8 +945,10 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
     uint8_t cellCount = data[3];  // Direct byte value, no increment
     
     // Current is in bytes 4-5 (moduleMmc field) - LITTLE ENDIAN
-    int16_t currentRaw = data[4] | (data[5] << 8);
-    float current = currentRaw * 0.1f;  // 0.1A per bit
+    // MODULE_CURRENT_BASE = -655.36A, MODULE_CURRENT_FACTOR = 0.02A
+    // actual_current = MODULE_CURRENT_BASE + (raw * MODULE_CURRENT_FACTOR)
+    uint16_t currentRaw = data[4] | (data[5] << 8);
+    float current = -655.36f + (currentRaw * 0.02f);
     
     // Voltage is in bytes 6-7 (moduleMmv field) - LITTLE ENDIAN
     uint16_t voltageRaw = data[6] | (data[7] << 8);
@@ -1123,8 +1125,9 @@ void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
         uint16_t maxVoltage = data[4] | (data[5] << 8);
         uint16_t hwVersion = data[6] | (data[7] << 8);
         
-        module->maxChargeCurrent = maxCharge * 0.1f;
-        module->maxDischargeCurrent = maxDischarge * 0.1f;
+        // Currents use MODULE_CURRENT_BASE and MODULE_CURRENT_FACTOR
+        module->maxChargeCurrent = -655.36f + (maxCharge * 0.02f);
+        module->maxDischargeCurrent = -655.36f + (maxDischarge * 0.02f);
         module->maxChargeVoltage = maxVoltage * 0.01f;
         module->hardwareVersion = hwVersion;
         
