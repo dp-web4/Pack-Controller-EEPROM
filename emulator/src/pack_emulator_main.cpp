@@ -692,7 +692,20 @@ void TMainForm::UpdateConnectionStatus(bool connected) {
 
 void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     // Process message based on ID
-    uint32_t canId = msg.id & 0x7FF;
+    // For extended frames, the standard 11-bit ID is in bits 28-18
+    // The module ID is in bits 17-0
+    uint32_t canId;
+    uint8_t moduleIdFromExtended = 0;
+    
+    if (msg.isExtended) {
+        // Extended frame: extract standard ID from bits 28-18
+        canId = (msg.id >> 18) & 0x7FF;
+        // Module ID is in lower bits
+        moduleIdFromExtended = msg.id & 0xFF;
+    } else {
+        // Standard frame: use the ID directly
+        canId = msg.id & 0x7FF;
+    }
     
     // Format data string with better spacing
     String dataStr;
@@ -730,8 +743,14 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
             description = "";
     }
     
-    LogMessage("← 0x" + IntToHex((int)canId, 3) + description + " [" + 
-               IntToStr(msg.length) + "] " + dataStr);
+    // Log with module ID for extended frames
+    if (msg.isExtended && moduleIdFromExtended > 0) {
+        LogMessage("← 0x" + IntToHex((int)canId, 3) + " (M" + IntToStr(moduleIdFromExtended) + ")" + 
+                   description + " [" + IntToStr(msg.length) + "] " + dataStr);
+    } else {
+        LogMessage("← 0x" + IntToHex((int)canId, 3) + description + " [" + 
+                   IntToStr(msg.length) + "] " + dataStr);
+    }
     
     // Check for module announcements (0x500 or 0x000 for compatibility)
     // Module firmware bug: sending on 0x000 instead of 0x500
@@ -844,8 +863,8 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     }
     // Check for module status messages
     else if (canId == ID_MODULE_STATUS_1) {
-        // Extract module ID from extended ID (bits 17-0)
-        uint8_t moduleId = msg.id & 0xFF;
+        // Use the module ID we already extracted from extended frame
+        uint8_t moduleId = moduleIdFromExtended;
         LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_1 from module " + IntToStr(moduleId));
         
         // Clear the pending flag since we got a response
@@ -853,8 +872,8 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         ProcessModuleStatus1(moduleId, msg.data);
     }
     else if (canId == ID_MODULE_STATUS_2) {
-        // Extract module ID from extended ID
-        uint8_t moduleId = msg.id & 0xFF;
+        // Use the module ID we already extracted from extended frame
+        uint8_t moduleId = moduleIdFromExtended;
         // Log only occasionally to avoid spam
         static int status2Count = 0;
         if (++status2Count % 10 == 0) {
@@ -863,8 +882,8 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         ProcessModuleStatus2(moduleId, msg.data);
     }
     else if (canId == ID_MODULE_STATUS_3) {
-        // Extract module ID from extended ID
-        uint8_t moduleId = msg.id & 0xFF;
+        // Use the module ID we already extracted from extended frame
+        uint8_t moduleId = moduleIdFromExtended;
         // Log only occasionally to avoid spam
         static int status3Count = 0;
         if (++status3Count % 10 == 0) {
@@ -874,7 +893,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     }
     else if (canId == ID_MODULE_HARDWARE) {
         // Hardware capability message from module
-        uint8_t moduleId = msg.id & 0xFF;
+        uint8_t moduleId = moduleIdFromExtended;
         LogMessage("← 0x" + IntToHex((int)canId, 3) + " HARDWARE from module " + IntToStr(moduleId));
         ProcessModuleHardware(moduleId, msg.data);
     }
@@ -1172,8 +1191,8 @@ void TMainForm::SendModuleStatusRequest(uint8_t moduleId) {
     uint32_t extendedId = ((uint32_t)ID_MODULE_STATUS_REQUEST << 18) | moduleId;
     
     if (canInterface->SendMessage(extendedId, data, 1, true)) {
-        // Don't log every status request as it happens frequently
-        // LogMessage("Sent status request to module " + IntToStr(moduleId));
+        // Log status requests to debug polling
+        LogMessage("→ 0x512 [Status Request] to module " + IntToStr(moduleId));
     }
 }
 
