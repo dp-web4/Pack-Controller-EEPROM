@@ -53,6 +53,23 @@ struct ModuleInfo {
     float soc;             // State of charge in %
     float soh;             // State of health in %
     
+    // Cell statistics from STATUS_2
+    float minCellVoltage;   // Minimum cell voltage in V
+    float maxCellVoltage;   // Maximum cell voltage in V
+    float avgCellVoltage;   // Average cell voltage in V
+    float totalCellVoltage; // Total of all cell voltages in V
+    
+    // Temperature statistics from STATUS_3
+    float minCellTemp;      // Minimum cell temperature in °C
+    float maxCellTemp;      // Maximum cell temperature in °C
+    float avgCellTemp;      // Average cell temperature in °C
+    
+    // Hardware capabilities from HARDWARE message
+    float maxChargeCurrent;    // Maximum charge current in A
+    float maxDischargeCurrent; // Maximum discharge current in A
+    float maxChargeVoltage;    // Maximum charge voltage in V
+    uint16_t hardwareVersion;  // Hardware version
+    
     // Cell data
     std::vector<float> cellVoltages;
     std::vector<float> cellTemperatures;

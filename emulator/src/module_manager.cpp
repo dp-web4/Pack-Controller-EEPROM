@@ -77,6 +77,23 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.soc = 0.0f;
     module.soh = 100.0f;
     
+    // Initialize cell statistics
+    module.minCellVoltage = 0.0f;
+    module.maxCellVoltage = 0.0f;
+    module.avgCellVoltage = 0.0f;
+    module.totalCellVoltage = 0.0f;
+    
+    // Initialize temperature statistics
+    module.minCellTemp = 25.0f;
+    module.maxCellTemp = 25.0f;
+    module.avgCellTemp = 25.0f;
+    
+    // Initialize hardware capabilities
+    module.maxChargeCurrent = 0.0f;
+    module.maxDischargeCurrent = 0.0f;
+    module.maxChargeVoltage = 0.0f;
+    module.hardwareVersion = 0;
+    
     // Don't initialize cell arrays - wait for actual cell count from MODULE_STATUS_1
     // module.cellVoltages will be empty (size 0) until we receive the status message
     module.cellVoltages.clear();

@@ -537,6 +537,52 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     SOCLabel->Caption = "SOC: " + FloatToStrF(module->soc, ffFixed, 7, 1) + " %";
     SOHLabel->Caption = "SOH: " + FloatToStrF(module->soh, ffFixed, 7, 1) + " %";
     
+    // Update StatusGrid with additional module information
+    StatusGrid->RowCount = 12;  // Increase rows for more data
+    StatusGrid->Cells[0][0] = "Property";
+    StatusGrid->Cells[1][0] = "Value";
+    
+    StatusGrid->Cells[0][1] = "Module ID";
+    StatusGrid->Cells[1][1] = IntToStr(module->moduleId);
+    
+    StatusGrid->Cells[0][2] = "State";
+    String stateStr;
+    switch(module->state) {
+        case PackEmulator::ModuleState::OFF: stateStr = "OFF"; break;
+        case PackEmulator::ModuleState::STANDBY: stateStr = "STANDBY"; break;
+        case PackEmulator::ModuleState::PRECHARGE: stateStr = "PRECHARGE"; break;
+        case PackEmulator::ModuleState::ON: stateStr = "ON"; break;
+        default: stateStr = "UNKNOWN"; break;
+    }
+    StatusGrid->Cells[1][2] = stateStr;
+    
+    StatusGrid->Cells[0][3] = "Min Cell V";
+    StatusGrid->Cells[1][3] = FloatToStrF(module->minCellVoltage, ffFixed, 7, 3) + " V";
+    
+    StatusGrid->Cells[0][4] = "Max Cell V";
+    StatusGrid->Cells[1][4] = FloatToStrF(module->maxCellVoltage, ffFixed, 7, 3) + " V";
+    
+    StatusGrid->Cells[0][5] = "Avg Cell V";
+    StatusGrid->Cells[1][5] = FloatToStrF(module->avgCellVoltage, ffFixed, 7, 3) + " V";
+    
+    StatusGrid->Cells[0][6] = "Total Cell V";
+    StatusGrid->Cells[1][6] = FloatToStrF(module->totalCellVoltage, ffFixed, 7, 2) + " V";
+    
+    StatusGrid->Cells[0][7] = "Min Temp";
+    StatusGrid->Cells[1][7] = FloatToStrF(module->minCellTemp, ffFixed, 7, 1) + " °C";
+    
+    StatusGrid->Cells[0][8] = "Max Temp";
+    StatusGrid->Cells[1][8] = FloatToStrF(module->maxCellTemp, ffFixed, 7, 1) + " °C";
+    
+    StatusGrid->Cells[0][9] = "Avg Temp";
+    StatusGrid->Cells[1][9] = FloatToStrF(module->avgCellTemp, ffFixed, 7, 1) + " °C";
+    
+    StatusGrid->Cells[0][10] = "Max Charge I";
+    StatusGrid->Cells[1][10] = FloatToStrF(module->maxChargeCurrent, ffFixed, 7, 1) + " A";
+    
+    StatusGrid->Cells[0][11] = "Max Discharge I";
+    StatusGrid->Cells[1][11] = FloatToStrF(module->maxDischargeCurrent, ffFixed, 7, 1) + " A";
+    
     // Update cell display
     UpdateCellDisplay(moduleId);
 }
@@ -794,10 +840,25 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         }
     }
     // Check for module status messages
-    else if (canId == ID_MODULE_STATUS_1 || canId == ID_MODULE_STATUS_2 || 
-             canId == ID_MODULE_STATUS_3 || canId == ID_MODULE_STATUS_4) {
-        uint8_t moduleId = msg.data[0];  // Module ID is typically in first byte
-        ProcessModuleStatus(moduleId, msg.data);
+    else if (canId == ID_MODULE_STATUS_1) {
+        // Extract module ID from extended ID (bits 17-0)
+        uint8_t moduleId = msg.id & 0xFF;
+        ProcessModuleStatus1(moduleId, msg.data);
+    }
+    else if (canId == ID_MODULE_STATUS_2) {
+        // Extract module ID from extended ID
+        uint8_t moduleId = msg.id & 0xFF;
+        ProcessModuleStatus2(moduleId, msg.data);
+    }
+    else if (canId == ID_MODULE_STATUS_3) {
+        // Extract module ID from extended ID
+        uint8_t moduleId = msg.id & 0xFF;
+        ProcessModuleStatus3(moduleId, msg.data);
+    }
+    else if (canId == ID_MODULE_HARDWARE) {
+        // Hardware capability message from module
+        uint8_t moduleId = msg.id & 0xFF;
+        ProcessModuleHardware(moduleId, msg.data);
     }
     // Check for cell voltage data (from VCU interface, repurpose for modules)
     else if (canId == ID_MODULE_CELL_VOLTAGE) {
@@ -829,10 +890,10 @@ void TMainForm::OnCANError(uint32_t errorCode, const std::string& errorMsg) {
     }
 }
 
-void TMainForm::ProcessModuleStatus(uint8_t moduleId, const uint8_t* data) {
+void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
     moduleManager->UpdateModuleStatus(moduleId, data);
     
-    // Parse MODULE_STATUS_1 according to DBC:
+    // Parse MODULE_STATUS_1 according to can_frm_mod.h:
     // Byte 0: ModuleState (bits 0-3) and ModuleStatus (bits 4-7)
     // Byte 1: ModuleSOC (0.5% per bit)
     // Byte 2: ModuleSOH (0.5% per bit)
@@ -914,6 +975,94 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
     if (module != NULL) {
         LogMessage("Module " + IntToStr(moduleId) + " detail received");
         UpdateModuleDetails(moduleId);
+    }
+}
+
+void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
+    // Parse MODULE_STATUS_2 according to can_frm_mod.h:
+    // Bytes 0-1: cellLoVolt (16 bits, 0.001V per bit)
+    // Bytes 2-3: cellHiVolt (16 bits, 0.001V per bit)
+    // Bytes 4-5: cellAvgVolt (16 bits, 0.001V per bit)
+    // Bytes 6-7: cellTotalV (16 bits, 0.01V per bit)
+    
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        uint16_t loVolt = (data[0] << 8) | data[1];
+        uint16_t hiVolt = (data[2] << 8) | data[3];
+        uint16_t avgVolt = (data[4] << 8) | data[5];
+        uint16_t totalVolt = (data[6] << 8) | data[7];
+        
+        // Store min/max/avg cell voltages (converting from mV to V)
+        module->minCellVoltage = loVolt * 0.001f;
+        module->maxCellVoltage = hiVolt * 0.001f;
+        module->avgCellVoltage = avgVolt * 0.001f;
+        module->totalCellVoltage = totalVolt * 0.01f;
+        
+        // Log only occasionally to avoid spam
+        static int status2Count = 0;
+        if (++status2Count % 10 == 0) {
+            LogMessage("Module " + IntToStr(moduleId) + " STATUS_2: Min=" + 
+                      FloatToStrF(module->minCellVoltage, ffFixed, 7, 3) + "V, Max=" +
+                      FloatToStrF(module->maxCellVoltage, ffFixed, 7, 3) + "V");
+        }
+    }
+}
+
+void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
+    // Parse MODULE_STATUS_3 according to can_frm_mod.h:
+    // Bytes 0-1: cellLoTemp (16 bits, 0.1°C per bit, offset -273.15)
+    // Bytes 2-3: cellHiTemp (16 bits, 0.1°C per bit, offset -273.15)
+    // Bytes 4-5: cellAvgTemp (16 bits, 0.1°C per bit, offset -273.15)
+    // Bytes 6-7: UNUSED
+    
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        uint16_t loTemp = (data[0] << 8) | data[1];
+        uint16_t hiTemp = (data[2] << 8) | data[3];
+        uint16_t avgTemp = (data[4] << 8) | data[5];
+        
+        // Convert from 0.1°K to °C (subtract 273.15)
+        module->minCellTemp = (loTemp * 0.1f) - 273.15f;
+        module->maxCellTemp = (hiTemp * 0.1f) - 273.15f;
+        module->avgCellTemp = (avgTemp * 0.1f) - 273.15f;
+        
+        // Update the main temperature with average
+        module->temperature = module->avgCellTemp;
+        
+        // Log only occasionally
+        static int status3Count = 0;
+        if (++status3Count % 10 == 0) {
+            LogMessage("Module " + IntToStr(moduleId) + " STATUS_3: Temp Min=" + 
+                      FloatToStrF(module->minCellTemp, ffFixed, 7, 1) + "°C, Max=" +
+                      FloatToStrF(module->maxCellTemp, ffFixed, 7, 1) + "°C");
+        }
+    }
+}
+
+void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
+    // Parse MODULE_HARDWARE according to can_frm_mod.h:
+    // Bytes 0-1: maxChargeA (16 bits, 0.1A per bit)
+    // Bytes 2-3: maxDischargeA (16 bits, 0.1A per bit)
+    // Bytes 4-5: maxChargeEndV (16 bits, 0.01V per bit)
+    // Bytes 6-7: hwVersion (16 bits)
+    
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        uint16_t maxCharge = (data[0] << 8) | data[1];
+        uint16_t maxDischarge = (data[2] << 8) | data[3];
+        uint16_t maxVoltage = (data[4] << 8) | data[5];
+        uint16_t hwVersion = (data[6] << 8) | data[7];
+        
+        module->maxChargeCurrent = maxCharge * 0.1f;
+        module->maxDischargeCurrent = maxDischarge * 0.1f;
+        module->maxChargeVoltage = maxVoltage * 0.01f;
+        module->hardwareVersion = hwVersion;
+        
+        LogMessage("Module " + IntToStr(moduleId) + " HARDWARE: MaxChg=" + 
+                  FloatToStrF(module->maxChargeCurrent, ffFixed, 7, 1) + "A, MaxDis=" +
+                  FloatToStrF(module->maxDischargeCurrent, ffFixed, 7, 1) + "A, MaxV=" +
+                  FloatToStrF(module->maxChargeVoltage, ffFixed, 7, 2) + "V, HW=0x" +
+                  IntToHex(hwVersion, 4));
     }
 }
 

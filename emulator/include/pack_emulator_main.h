@@ -165,7 +165,10 @@ private:	// User declarations
     void OnCANError(uint32_t errorCode, const std::string& errorMsg);
     
     // Message processing
-    void ProcessModuleStatus(uint8_t moduleId, const uint8_t* data);
+    void ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data);
+    void ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data);
+    void ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data);
+    void ProcessModuleHardware(uint8_t moduleId, const uint8_t* data);
     void ProcessCellVoltages(uint8_t moduleId, const uint8_t* data);
     void ProcessCellTemperatures(uint8_t moduleId, const uint8_t* data);
     void ProcessModuleFault(uint8_t moduleId, const uint8_t* data);
