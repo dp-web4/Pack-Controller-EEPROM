@@ -30,8 +30,8 @@ BO_ 1282 MODULE_STATUS_1: 8 Module
  SG_ ModuleSOC : 8|8@1+ (0.5,0) [0|100] "%" PackController
  SG_ ModuleSOH : 16|8@1+ (0.5,0) [0|100] "%" PackController
  SG_ CellCount : 24|8@1+ (1,0) [0|255] "" PackController
- SG_ ModuleMeasuredCurrent : 32|16@1- (0.1,0) [-3276.8|3276.7] "A" PackController
- SG_ ModuleMeasuredVoltage : 48|16@1+ (0.01,0) [0|655.35] "V" PackController
+ SG_ ModuleMeasuredCurrent : 32|16@1+ (0.02,-655.36) [-655.36|655.34] "A" PackController
+ SG_ ModuleMeasuredVoltage : 48|16@1+ (0.015,0) [0|983.025] "V" PackController
 
 BO_ 1283 MODULE_STATUS_2: 8 Module
  SG_ MinCellVoltage : 0|16@1+ (0.001,0) [0|65.535] "V" PackController
@@ -40,14 +40,14 @@ BO_ 1283 MODULE_STATUS_2: 8 Module
  SG_ TotalCellVoltage : 48|16@1+ (0.01,0) [0|655.35] "V" PackController
 
 BO_ 1284 MODULE_STATUS_3: 8 Module
- SG_ MinCellTemperature : 0|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
- SG_ MaxCellTemperature : 16|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
- SG_ AvgCellTemperature : 32|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
+ SG_ MinCellTemperature : 0|16@1+ (0.01,0) [0|655.35] "°C" PackController
+ SG_ MaxCellTemperature : 16|16@1+ (0.01,0) [0|655.35] "°C" PackController
+ SG_ AvgCellTemperature : 32|16@1+ (0.01,0) [0|655.35] "°C" PackController
 
 BO_ 1285 MODULE_DETAIL: 8 Module
  SG_ CellID : 0|8@1+ (1,0) [0|255] "" PackController
  SG_ CellCount : 8|8@1+ (1,0) [0|255] "" PackController
- SG_ CellTemperature : 16|16@1+ (0.1,-273.15) [-273.15|6280.35] "°C" PackController
+ SG_ CellTemperature : 16|16@1+ (0.01,0) [0|655.35] "°C" PackController
  SG_ CellVoltage : 32|16@1+ (0.001,0) [0|65.535] "V" PackController
  SG_ CellSOC : 48|8@1+ (0.5,0) [0|100] "%" PackController
  SG_ CellSOH : 56|8@1+ (0.5,0) [0|100] "%" PackController
@@ -98,6 +98,17 @@ BO_ 1311 MODULE_ALL_ISOLATE: 1 PackController
 
 CM_ BU_ PackController "Battery Pack Controller - manages up to 32 battery modules";
 CM_ BU_ Module "Battery Module - individual battery unit with cells";
+
+CM_ "EXTENDED FRAME ID FORMAT: Module messages use 29-bit extended CAN IDs where:";
+CM_ "- Bits 28-18: Standard 11-bit CAN ID (e.g., 0x502 for MODULE_STATUS_1)";
+CM_ "- Bits 17-0: Module ID (0-255, typically bits 7-0 used, rest zero)";
+CM_ "Example: MODULE_STATUS_1 from module ID 5 = 0x14080005 (0x502 << 18 | 0x05)";
+
+CM_ "VALUE CALCULATIONS:";
+CM_ "- Current: actual_amps = -655.36 + (raw_value * 0.02)";
+CM_ "- Module Voltage: actual_volts = raw_value * 0.015";
+CM_ "- Cell Voltage: actual_volts = raw_value * 0.001";
+CM_ "- Temperature: actual_celsius = raw_value * 0.01 (no Kelvin offset for modules)";
 
 CM_ BO_ 1280 "Module announces itself to pack controller with unique ID (0x500)";
 CM_ BO_ 1281 "Module hardware capabilities response (0x501)";
