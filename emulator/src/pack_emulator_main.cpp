@@ -1231,37 +1231,20 @@ void __fastcall TMainForm::PollTimerTimer(TObject *Sender) {
     std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
     if (moduleIds.empty()) return;
     
-    // Check if enough time has passed since last poll (100ms between polls)
+    // Timer already runs at 100ms interval, no need to check again
     DWORD currentTime = GetTickCount();
-    if ((currentTime - lastPollTime) < 100) return;
     
-    // Find next module to poll
-    bool foundModule = false;
-    for (size_t i = 0; i < moduleIds.size(); i++) {
-        if (nextModuleToPoll >= moduleIds.size()) {
-            nextModuleToPoll = 0;
-        }
-        
-        uint8_t moduleId = moduleIds[nextModuleToPoll];
-        PackEmulator::ModuleInfo info = moduleManager->GetModuleInfo(moduleId);
-        
-        // Only poll if not already waiting for status
-        if (!info.statusPending) {
-            SendModuleStatusRequest(moduleId);
-            moduleManager->SetStatusPending(moduleId, true);
-            nextModuleToPoll++;
-            lastPollTime = currentTime;
-            foundModule = true;
-            break;
-        }
-        
-        nextModuleToPoll++;
-    }
-    
-    // If we couldn't find any module to poll, reset
-    if (!foundModule) {
+    // Simple round-robin polling - poll one module per timer tick
+    if (nextModuleToPoll >= moduleIds.size()) {
         nextModuleToPoll = 0;
     }
+    
+    uint8_t moduleId = moduleIds[nextModuleToPoll];
+    SendModuleStatusRequest(moduleId);
+    
+    // Move to next module for next poll
+    nextModuleToPoll++;
+    lastPollTime = currentTime;
 }
 
 //---------------------------------------------------------------------------
