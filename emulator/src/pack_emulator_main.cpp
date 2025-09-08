@@ -944,12 +944,12 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
     uint8_t moduleStatus = (stateAndStatus >> 4) & 0x0F;  // Upper 4 bits
     uint8_t cellCount = data[3];  // Direct byte value, no increment
     
-    // Current is in bytes 4-5 (moduleMmc field)
-    int16_t currentRaw = (data[4] << 8) | data[5];
+    // Current is in bytes 4-5 (moduleMmc field) - LITTLE ENDIAN
+    int16_t currentRaw = data[4] | (data[5] << 8);
     float current = currentRaw * 0.1f;  // 0.1A per bit
     
-    // Voltage is in bytes 6-7 (moduleMmv field)  
-    uint16_t voltageRaw = (data[6] << 8) | data[7];
+    // Voltage is in bytes 6-7 (moduleMmv field) - LITTLE ENDIAN
+    uint16_t voltageRaw = data[6] | (data[7] << 8);
     float voltage = voltageRaw * 0.015f;  // MODULE_VOLTAGE_FACTOR = 0.015V per bit
     
     float soc = data[1] * 0.5f;
@@ -999,7 +999,8 @@ void TMainForm::ProcessCellVoltages(uint8_t moduleId, const uint8_t* data) {
     // Parse cell voltage data (format depends on protocol)
     uint16_t voltages[4];
     for (int i = 0; i < 4; i++) {
-        voltages[i] = (data[i * 2] << 8) | data[i * 2 + 1];
+        // LITTLE ENDIAN byte order
+        voltages[i] = data[i * 2] | (data[i * 2 + 1] << 8);
     }
     
     // Determine starting cell index from CAN ID
@@ -1012,7 +1013,8 @@ void TMainForm::ProcessCellTemperatures(uint8_t moduleId, const uint8_t* data) {
     // Similar to voltage processing
     uint16_t temps[4];
     for (int i = 0; i < 4; i++) {
-        temps[i] = (data[i * 2] << 8) | data[i * 2 + 1];
+        // LITTLE ENDIAN byte order
+        temps[i] = data[i * 2] | (data[i * 2 + 1] << 8);
     }
     
     uint8_t startCell = (data[0] >> 4) * 4;
@@ -1050,10 +1052,11 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
-        uint16_t loVolt = (data[0] << 8) | data[1];
-        uint16_t hiVolt = (data[2] << 8) | data[3];
-        uint16_t avgVolt = (data[4] << 8) | data[5];
-        uint16_t totalVolt = (data[6] << 8) | data[7];
+        // LITTLE ENDIAN byte order
+        uint16_t loVolt = data[0] | (data[1] << 8);
+        uint16_t hiVolt = data[2] | (data[3] << 8);
+        uint16_t avgVolt = data[4] | (data[5] << 8);
+        uint16_t totalVolt = data[6] | (data[7] << 8);
         
         // Store min/max/avg cell voltages using correct scaling factors
         module->minCellVoltage = loVolt * 0.001f;   // CELL_VOLTAGE_FACTOR
@@ -1081,9 +1084,10 @@ void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
-        uint16_t loTemp = (data[0] << 8) | data[1];
-        uint16_t hiTemp = (data[2] << 8) | data[3];
-        uint16_t avgTemp = (data[4] << 8) | data[5];
+        // LITTLE ENDIAN byte order
+        uint16_t loTemp = data[0] | (data[1] << 8);
+        uint16_t hiTemp = data[2] | (data[3] << 8);
+        uint16_t avgTemp = data[4] | (data[5] << 8);
         
         // Convert using TEMPERATURE_FACTOR (0.01°C per bit)
         // Temperatures are already in Celsius for module messages
@@ -1113,10 +1117,11 @@ void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
-        uint16_t maxCharge = (data[0] << 8) | data[1];
-        uint16_t maxDischarge = (data[2] << 8) | data[3];
-        uint16_t maxVoltage = (data[4] << 8) | data[5];
-        uint16_t hwVersion = (data[6] << 8) | data[7];
+        // LITTLE ENDIAN byte order
+        uint16_t maxCharge = data[0] | (data[1] << 8);
+        uint16_t maxDischarge = data[2] | (data[3] << 8);
+        uint16_t maxVoltage = data[4] | (data[5] << 8);
+        uint16_t hwVersion = data[6] | (data[7] << 8);
         
         module->maxChargeCurrent = maxCharge * 0.1f;
         module->maxDischargeCurrent = maxDischarge * 0.1f;
