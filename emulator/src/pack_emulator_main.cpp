@@ -511,6 +511,9 @@ void TMainForm::UpdateModuleList() {
             item->SubItems->Add(IntToStr((int)cellCount));
         }
         
+        // Add message count to debug if we're receiving data
+        item->SubItems->Add("Msgs:" + IntToStr((int)module->messageCount));
+        
         // Color the entire row based on module status
         if (!module->isResponding) {
             item->ImageIndex = -1;  // Could use for icon if we had an ImageList
@@ -843,21 +846,36 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     else if (canId == ID_MODULE_STATUS_1) {
         // Extract module ID from extended ID (bits 17-0)
         uint8_t moduleId = msg.id & 0xFF;
+        LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_1 from module " + IntToStr(moduleId));
+        
+        // Clear the pending flag since we got a response
+        moduleManager->SetStatusPending(moduleId, false);
         ProcessModuleStatus1(moduleId, msg.data);
     }
     else if (canId == ID_MODULE_STATUS_2) {
         // Extract module ID from extended ID
         uint8_t moduleId = msg.id & 0xFF;
+        // Log only occasionally to avoid spam
+        static int status2Count = 0;
+        if (++status2Count % 10 == 0) {
+            LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_2 from module " + IntToStr(moduleId));
+        }
         ProcessModuleStatus2(moduleId, msg.data);
     }
     else if (canId == ID_MODULE_STATUS_3) {
         // Extract module ID from extended ID
         uint8_t moduleId = msg.id & 0xFF;
+        // Log only occasionally to avoid spam
+        static int status3Count = 0;
+        if (++status3Count % 10 == 0) {
+            LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_3 from module " + IntToStr(moduleId));
+        }
         ProcessModuleStatus3(moduleId, msg.data);
     }
     else if (canId == ID_MODULE_HARDWARE) {
         // Hardware capability message from module
         uint8_t moduleId = msg.id & 0xFF;
+        LogMessage("← 0x" + IntToHex((int)canId, 3) + " HARDWARE from module " + IntToStr(moduleId));
         ProcessModuleHardware(moduleId, msg.data);
     }
     // Check for cell voltage data (from VCU interface, repurpose for modules)
@@ -891,6 +909,7 @@ void TMainForm::OnCANError(uint32_t errorCode, const std::string& errorMsg) {
 }
 
 void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
+    // First update the module status (updates message count and timestamp)
     moduleManager->UpdateModuleStatus(moduleId, data);
     
     // Parse MODULE_STATUS_1 according to can_frm_mod.h:
@@ -901,35 +920,53 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
     // Bytes 4-5: ModuleMeasuredCurrent (signed, 0.1A per bit)
     // Bytes 6-7: ModuleMeasuredVoltage (0.01V per bit)
     
+    uint8_t stateAndStatus = data[0];
+    uint8_t moduleState = stateAndStatus & 0x0F;  // Lower 4 bits
+    uint8_t moduleStatus = (stateAndStatus >> 4) & 0x0F;  // Upper 4 bits
     uint8_t cellCount = data[3];  // Direct byte value, no increment
     float voltage = ((data[6] << 8) | data[7]) * 0.01f;
     float current = ((int16_t)((data[4] << 8) | data[5])) * 0.1f;
     float soc = data[1] * 0.5f;
     float soh = data[2] * 0.5f;
     
-    // Debug log to check cell count (only log if it's non-zero)
-    if (cellCount > 0) {
-        LogMessage("Module " + IntToStr(moduleId) + " STATUS_1: CellCount=" + IntToStr(cellCount) + 
-                   " (raw byte[3]=0x" + IntToHex(data[3], 2) + ")");
-    }
+    // Log the actual data we received
+    LogMessage("  State=" + IntToStr(moduleState) + " Status=" + IntToStr(moduleStatus) +
+               " V=" + FloatToStrF(voltage, ffFixed, 7, 2) + "V" +
+               " I=" + FloatToStrF(current, ffFixed, 7, 1) + "A" +
+               " SOC=" + FloatToStrF(soc, ffFixed, 7, 1) + "%" +
+               " Cells=" + IntToStr(cellCount));
     
     // Update module with parsed data
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
+        // Update state
+        switch(moduleState) {
+            case 0: module->state = PackEmulator::ModuleState::OFF; break;
+            case 1: module->state = PackEmulator::ModuleState::STANDBY; break;
+            case 2: module->state = PackEmulator::ModuleState::PRECHARGE; break;
+            case 3: module->state = PackEmulator::ModuleState::ON; break;
+            default: module->state = PackEmulator::ModuleState::UNKNOWN; break;
+        }
+        
         module->soc = soc;
         module->soh = soh;
+        module->voltage = voltage;
+        module->current = current;
+        module->isResponding = true;
+        module->messageCount++;
         
         // Initialize cell arrays if cell count changed
-        if (module->cellVoltages.size() != cellCount) {
+        if (cellCount > 0 && module->cellVoltages.size() != cellCount) {
             module->cellVoltages.resize(cellCount, 3.2f);  // Default 3.2V per cell
             module->cellTemperatures.resize(cellCount, 25.0f);  // Default 25°C
         }
+        
+        // Update the module list display to show new data
+        UpdateModuleList();
     }
     
-    // Temperature isn't in STATUS_1, so we'll keep a default
-    float temp = 25.0f;  // Default temp
-    
-    moduleManager->UpdateModuleElectrical(moduleId, voltage, current, temp);
+    // Temperature isn't in STATUS_1, it comes from STATUS_3
+    // So we don't update temperature here
 }
 
 void TMainForm::ProcessCellVoltages(uint8_t moduleId, const uint8_t* data) {
