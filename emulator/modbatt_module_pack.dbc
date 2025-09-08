@@ -40,14 +40,14 @@ BO_ 1283 MODULE_STATUS_2: 8 Module
  SG_ TotalCellVoltage : 48|16@1+ (0.01,0) [0|655.35] "V" PackController
 
 BO_ 1284 MODULE_STATUS_3: 8 Module
- SG_ MinCellTemperature : 0|16@1+ (0.01,0) [0|655.35] "°C" PackController
- SG_ MaxCellTemperature : 16|16@1+ (0.01,0) [0|655.35] "°C" PackController
- SG_ AvgCellTemperature : 32|16@1+ (0.01,0) [0|655.35] "°C" PackController
+ SG_ MinCellTemperature : 0|16@1+ (0.01,-55.35) [-55.35|600.0] "°C" PackController
+ SG_ MaxCellTemperature : 16|16@1+ (0.01,-55.35) [-55.35|600.0] "°C" PackController
+ SG_ AvgCellTemperature : 32|16@1+ (0.01,-55.35) [-55.35|600.0] "°C" PackController
 
 BO_ 1285 MODULE_DETAIL: 8 Module
  SG_ CellID : 0|8@1+ (1,0) [0|255] "" PackController
  SG_ CellCount : 8|8@1+ (1,0) [0|255] "" PackController
- SG_ CellTemperature : 16|16@1+ (0.01,0) [0|655.35] "°C" PackController
+ SG_ CellTemperature : 16|16@1+ (0.01,-55.35) [-55.35|600.0] "°C" PackController
  SG_ CellVoltage : 32|16@1+ (0.001,0) [0|65.535] "V" PackController
  SG_ CellSOC : 48|8@1+ (0.5,0) [0|100] "%" PackController
  SG_ CellSOH : 56|8@1+ (0.5,0) [0|100] "%" PackController
@@ -108,7 +108,7 @@ CM_ "VALUE CALCULATIONS:";
 CM_ "- Current: actual_amps = -655.36 + (raw_value * 0.02)";
 CM_ "- Module Voltage: actual_volts = raw_value * 0.015";
 CM_ "- Cell Voltage: actual_volts = raw_value * 0.001";
-CM_ "- Temperature: actual_celsius = raw_value * 0.01 (no Kelvin offset for modules)";
+CM_ "- Temperature: actual_celsius = (raw_value * 0.01) - 55.35";
 
 CM_ BO_ 1280 "Module announces itself to pack controller with unique ID (0x500)";
 CM_ BO_ 1281 "Module hardware capabilities response (0x501)";

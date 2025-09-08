@@ -1078,11 +1078,11 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
 
 void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
     // Parse MODULE_STATUS_3 according to can_frm_mod.h:
-    // Bytes 0-1: cellLoTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit)
-    // Bytes 2-3: cellHiTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit)
-    // Bytes 4-5: cellAvgTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit)
+    // Bytes 0-1: cellLoTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit, -55.35°C offset)
+    // Bytes 2-3: cellHiTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit, -55.35°C offset)
+    // Bytes 4-5: cellAvgTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit, -55.35°C offset)
     // Bytes 6-7: UNUSED
-    // Note: Temperatures are already in Celsius, no Kelvin offset needed for module messages
+    // Note: Temperature encoding: actual_celsius = (raw * 0.01) - 55.35
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
@@ -1091,11 +1091,11 @@ void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
         uint16_t hiTemp = data[2] | (data[3] << 8);
         uint16_t avgTemp = data[4] | (data[5] << 8);
         
-        // Convert using TEMPERATURE_FACTOR (0.01°C per bit)
-        // Temperatures are already in Celsius for module messages
-        module->minCellTemp = loTemp * 0.01f;
-        module->maxCellTemp = hiTemp * 0.01f;
-        module->avgCellTemp = avgTemp * 0.01f;
+        // Convert using TEMPERATURE_FACTOR (0.01°C per bit) with -55.35°C offset
+        // Temperature encoding: actual_celsius = (raw * 0.01) - 55.35
+        module->minCellTemp = (loTemp * 0.01f) - 55.35f;
+        module->maxCellTemp = (hiTemp * 0.01f) - 55.35f;
+        module->avgCellTemp = (avgTemp * 0.01f) - 55.35f;
         
         // Update the main temperature with average
         module->temperature = module->avgCellTemp;
