@@ -64,6 +64,7 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.state = ModuleState::OFF;
     module.isRegistered = true;
     module.isResponding = true;
+    module.statusPending = false;
     module.hasWeb4Keys = false;
     module.lastMessageTime = GetTickCount();
     module.messageCount = 0;
@@ -146,6 +147,7 @@ void ModuleManager::UpdateModuleStatus(uint8_t moduleId, const uint8_t* data) {
     it->second.lastMessageTime = GetTickCount();
     it->second.messageCount++;
     it->second.isResponding = true;
+    it->second.statusPending = false;  // Clear pending flag when we receive status
     
     // Parse status data (format depends on protocol)
     it->second.state = static_cast<ModuleState>(data[0] & 0x07);
@@ -205,6 +207,17 @@ ModuleInfo* ModuleManager::GetModule(uint8_t moduleId) {
     return NULL;
 }
 
+ModuleInfo ModuleManager::GetModuleInfo(uint8_t moduleId) {
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
+    if (it != modules.end()) {
+        return it->second;
+    }
+    // Return empty module info if not found
+    ModuleInfo empty;
+    memset(&empty, 0, sizeof(empty));
+    return empty;
+}
+
 std::vector<ModuleInfo*> ModuleManager::GetAllModules() {
     std::vector<ModuleInfo*> result;
     for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
@@ -233,6 +246,13 @@ bool ModuleManager::IsModuleRegistered(uint8_t moduleId) {
 bool ModuleManager::IsModuleResponding(uint8_t moduleId) {
     std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     return (it != modules.end() && it->second.isResponding);
+}
+
+void ModuleManager::SetStatusPending(uint8_t moduleId, bool pending) {
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
+    if (it != modules.end()) {
+        it->second.statusPending = pending;
+    }
 }
 
 float ModuleManager::GetPackVoltage() {

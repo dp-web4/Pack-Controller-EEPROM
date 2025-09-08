@@ -31,13 +31,27 @@ object MainForm: TMainForm
       Caption = ' CAN Connection '
       TabOrder = 0
       object ConnectionStatusLabel: TLabel
-        Left = 505
+        Left = 380
         Top = 15
-        Width = 69
+        Width = 80
         Height = 13
         Caption = 'Disconnected'
         Font.Charset = DEFAULT_CHARSET
         Font.Color = clRed
+        Font.Height = -11
+        Font.Name = 'Tahoma'
+        Font.Style = []
+        ParentFont = False
+      end
+      object HeartbeatLabel: TLabel
+        Left = 475
+        Top = 15
+        Width = 115
+        Height = 13
+        Caption = 'Heartbeat: -'
+        AutoSize = True
+        Font.Charset = DEFAULT_CHARSET
+        Font.Color = clGray
         Font.Height = -11
         Font.Name = 'Tahoma'
         Font.Style = []
@@ -535,9 +549,23 @@ object MainForm: TMainForm
     Left = 920
     Top = 152
   end
-  object MainMenu: TMainMenu
+  object DiscoveryTimer: TTimer
+    Enabled = False
+    Interval = 5000
+    OnTimer = DiscoveryTimerTimer
     Left = 920
     Top = 200
+  end
+  object PollTimer: TTimer
+    Enabled = False
+    Interval = 100
+    OnTimer = PollTimerTimer
+    Left = 920
+    Top = 248
+  end
+  object MainMenu: TMainMenu
+    Left = 920
+    Top = 296
     object FileMenu: TMenuItem
       Caption = '&File'
       object SaveConfigItem: TMenuItem
@@ -584,12 +612,12 @@ object MainForm: TMainForm
     DefaultExt = 'csv'
     Filter = 'CSV Files (*.csv)|*.csv|All Files (*.*)|*.*'
     Left = 920
-    Top = 248
+    Top = 344
   end
   object OpenDialog: TOpenDialog
     DefaultExt = 'ini'
     Filter = 'Config Files (*.ini)|*.ini|All Files (*.*)|*.*'
     Left = 920
-    Top = 296
+    Top = 392
   end
 end

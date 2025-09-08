@@ -7,6 +7,7 @@
 #include "../include/can_id_bms_vcu.h"
 #include <sstream>
 #include <iomanip>
+#include <windows.h>
 
 // Windows message for scrolling edit controls
 #ifndef EM_LINESCROLL
@@ -22,7 +23,9 @@ TMainForm *MainForm;
 __fastcall TMainForm::TMainForm(TComponent* Owner)
     : TForm(Owner)
     , isConnected(false)
-    , selectedModuleId(0) {
+    , selectedModuleId(0)
+    , nextModuleToPoll(0)
+    , lastPollTime(0) {
 }
 
 //---------------------------------------------------------------------------
@@ -111,6 +114,13 @@ void __fastcall TMainForm::ConnectButtonClick(TObject *Sender) {
         RegisterButton->Enabled = true;
         ConnectButton->Enabled = false;
         DisconnectButton->Enabled = true;
+        
+        // Start timers
+        DiscoveryTimer->Enabled = true;
+        PollTimer->Enabled = true;
+        
+        // Send initial discovery request
+        SendModuleDiscoveryRequest();
     } else {
         ShowError("Failed to connect: " + String(canInterface->GetLastError().c_str()));
     }
@@ -124,6 +134,14 @@ void __fastcall TMainForm::DisconnectButtonClick(TObject *Sender) {
     isConnected = false;
     UpdateConnectionStatus(false);
     LogMessage("Disconnected from CAN bus");
+    
+    // Update heartbeat indicator
+    HeartbeatLabel->Caption = "Heartbeat: -";
+    HeartbeatLabel->Font->Color = clGray;
+    
+    // Stop timers
+    DiscoveryTimer->Enabled = false;
+    PollTimer->Enabled = false;
     
     // Disable controls
     DiscoverButton->Enabled = false;
@@ -287,9 +305,13 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             
             // Send maximum allowed state broadcast (0x517)
             // This tells all modules the highest state they're allowed to enter
-            uint8_t maxState = static_cast<uint8_t>(PackEmulator::ModuleState::ON);  // Allow up to ON state
+            uint8_t maxState = static_cast<uint8_t>(GetSelectedState());  // Use the state selected in UI
             uint8_t data[8] = {0};
             data[0] = maxState;  // Maximum allowed state
+            
+            // Update heartbeat indicator
+            HeartbeatLabel->Caption = "Heartbeat: " + IntToStr(maxState);
+            HeartbeatLabel->Font->Color = clGreen;
             
             // Broadcast to all modules (use 0xFF as broadcast ID)
             // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
@@ -332,6 +354,9 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             if (wasBroadcasting) {
                 LogMessage("Stopped broadcasting (no registered modules)");
                 wasBroadcasting = false;
+                // Update heartbeat indicator
+                HeartbeatLabel->Caption = "Heartbeat: -";
+                HeartbeatLabel->Font->Color = clGray;
             }
         }
     }
@@ -931,6 +956,89 @@ PackEmulator::ModuleState TMainForm::GetSelectedState() {
         case 2: return PackEmulator::ModuleState::PRECHARGE;
         case 3: return PackEmulator::ModuleState::ON;
         default: return PackEmulator::ModuleState::OFF;
+    }
+}
+
+void TMainForm::SendModuleDiscoveryRequest() {
+    if (!isConnected) return;
+    
+    // Send module announcement request (0x51D)
+    // This is a broadcast to all modules asking them to announce themselves
+    uint8_t data[8] = {0};
+    data[0] = 0x00;  // Request code (0x00 = request announcement)
+    
+    // For extended frames, the 11-bit message ID goes in bits 28-18
+    uint32_t extendedId = ((uint32_t)ID_MODULE_ANNOUNCE_REQUEST << 18) | 0;
+    
+    if (canInterface->SendMessage(extendedId, data, 1, true)) {
+        LogMessage("Sent module discovery request (0x51D)");
+    }
+}
+
+void TMainForm::SendModuleStatusRequest(uint8_t moduleId) {
+    if (!isConnected) return;
+    
+    // Send status request to specific module (0x512)
+    uint8_t data[8] = {0};
+    data[0] = moduleId;  // Module ID to request status from
+    
+    // For extended frames targeting a specific module
+    uint32_t extendedId = ((uint32_t)ID_MODULE_STATUS_REQUEST << 18) | moduleId;
+    
+    if (canInterface->SendMessage(extendedId, data, 1, true)) {
+        // Don't log every status request as it happens frequently
+        // LogMessage("Sent status request to module " + IntToStr(moduleId));
+    }
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::DiscoveryTimerTimer(TObject *Sender) {
+    (void)Sender;
+    
+    // Send discovery request every 5 seconds (actually using 10 seconds like Pack Controller)
+    SendModuleDiscoveryRequest();
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::PollTimerTimer(TObject *Sender) {
+    (void)Sender;
+    
+    if (!isConnected) return;
+    
+    // Get registered modules
+    std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
+    if (moduleIds.empty()) return;
+    
+    // Check if enough time has passed since last poll (100ms between polls)
+    DWORD currentTime = GetTickCount();
+    if ((currentTime - lastPollTime) < 100) return;
+    
+    // Find next module to poll
+    bool foundModule = false;
+    for (size_t i = 0; i < moduleIds.size(); i++) {
+        if (nextModuleToPoll >= moduleIds.size()) {
+            nextModuleToPoll = 0;
+        }
+        
+        uint8_t moduleId = moduleIds[nextModuleToPoll];
+        PackEmulator::ModuleInfo info = moduleManager->GetModuleInfo(moduleId);
+        
+        // Only poll if not already waiting for status
+        if (!info.statusPending) {
+            SendModuleStatusRequest(moduleId);
+            moduleManager->SetStatusPending(moduleId, true);
+            nextModuleToPoll++;
+            lastPollTime = currentTime;
+            foundModule = true;
+            break;
+        }
+        
+        nextModuleToPoll++;
+    }
+    
+    // If we couldn't find any module to poll, reset
+    if (!foundModule) {
+        nextModuleToPoll = 0;
     }
 }
 

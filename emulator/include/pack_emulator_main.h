@@ -41,6 +41,7 @@ __published:	// IDE-managed Components
     TButton *ConnectButton;
     TButton *DisconnectButton;
     TLabel *ConnectionStatusLabel;
+    TLabel *HeartbeatLabel;
     
     // Module list
     TGroupBox *ModulesGroup;
@@ -97,6 +98,8 @@ __published:	// IDE-managed Components
     // Timers
     TTimer *UpdateTimer;
     TTimer *TimeoutTimer;
+    TTimer *DiscoveryTimer;
+    TTimer *PollTimer;
     
     // Menus
     TMainMenu *MainMenu;
@@ -131,6 +134,8 @@ __published:	// IDE-managed Components
     void __fastcall ModuleListViewSelectItem(TObject *Sender, TListItem *Item, bool Selected);
     void __fastcall UpdateTimerTimer(TObject *Sender);
     void __fastcall TimeoutTimerTimer(TObject *Sender);
+    void __fastcall DiscoveryTimerTimer(TObject *Sender);
+    void __fastcall PollTimerTimer(TObject *Sender);
     void __fastcall DistributeKeysButtonClick(TObject *Sender);
     void __fastcall ClearHistoryButtonClick(TObject *Sender);
     void __fastcall ExportHistoryButtonClick(TObject *Sender);
@@ -145,6 +150,8 @@ private:	// User declarations
     
     bool isConnected;
     uint8_t selectedModuleId;
+    uint8_t nextModuleToPoll;
+    DWORD lastPollTime;
     
     // UI update functions
     void UpdateModuleList();
@@ -170,6 +177,8 @@ private:	// User declarations
     void LoadConfiguration();
     void SaveConfiguration();
     PackEmulator::ModuleState GetSelectedState();
+    void SendModuleDiscoveryRequest();
+    void SendModuleStatusRequest(uint8_t moduleId);
     
 public:		// User declarations
     __fastcall TMainForm(TComponent* Owner);

@@ -44,6 +44,7 @@ struct ModuleInfo {
     ModuleState state;
     bool isRegistered;
     bool isResponding;
+    bool statusPending;
     
     // Electrical data
     float voltage;          // Module voltage in V
@@ -95,11 +96,13 @@ public:
     
     // Module queries
     ModuleInfo* GetModule(uint8_t moduleId);
+    ModuleInfo GetModuleInfo(uint8_t moduleId);
     std::vector<ModuleInfo*> GetAllModules();
     std::vector<uint8_t> GetRegisteredModuleIds();
     int GetModuleCount() const { return modules.size(); }
     bool IsModuleRegistered(uint8_t moduleId);
     bool IsModuleResponding(uint8_t moduleId);
+    void SetStatusPending(uint8_t moduleId, bool pending);
     
     // Pack calculations
     float GetPackVoltage();
