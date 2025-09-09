@@ -1151,9 +1151,20 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
                   ": " + FloatToStrF(cellVolt, ffFixed, 7, 3) + "V, " +
                   FloatToStrF(cellTemp, ffFixed, 7, 1) + "°C");
         
-        // Update display if this module is selected
-        if (moduleId == selectedModuleId) {
-            UpdateCellDisplay(moduleId);
+        // Update only the specific cell row in the display if this module is selected
+        // This avoids the display glitch where values alternate between actual and zero
+        if (moduleId == selectedModuleId && DetailsPageControl->ActivePage == CellsTab) {
+            // Update just this cell's row in the grid (row = cellId + 1 due to header)
+            int gridRow = cellId + 1;
+            if (gridRow < CellGrid->RowCount) {
+                if (cellVolt == 0.0f) {
+                    CellGrid->Cells[1][gridRow] = "0.000";
+                    CellGrid->Cells[2][gridRow] = "0.0";
+                } else {
+                    CellGrid->Cells[1][gridRow] = FloatToStrF(cellVolt, ffFixed, 7, 3);
+                    CellGrid->Cells[2][gridRow] = FloatToStrF(cellTemp, ffFixed, 7, 1);
+                }
+            }
         }
     }
 }
