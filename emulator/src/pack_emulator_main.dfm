@@ -242,46 +242,58 @@ object MainForm: TMainForm
       Left = 1
       Top = 1
       Width = 701
-      Height = 96
+      Height = 65
       Align = alTop
       Caption = ' Module Control '
       TabOrder = 0
-      object StateRadioGroup: TRadioGroup
+      object SetOffButton: TButton
         Left = 16
         Top = 24
-        Width = 265
-        Height = 57
-        Caption = ' Set State '
-        Columns = 4
-        ItemIndex = 0
-        Items.Strings = (
-          'Off'
-          'Standby'
-          'Precharge'
-          'On')
-        TabOrder = 0
-      end
-      object SetStateButton: TButton
-        Left = 296
-        Top = 32
-        Width = 97
+        Width = 65
         Height = 25
-        Caption = 'Set Module State'
+        Caption = 'Set Off'
+        TabOrder = 0
+        OnClick = SetOffButtonClick
+      end
+      object SetStandbyButton: TButton
+        Left = 87
+        Top = 24
+        Width = 65
+        Height = 25
+        Caption = 'Set Standby'
         TabOrder = 1
-        OnClick = SetStateButtonClick
+        OnClick = SetStandbyButtonClick
+      end
+      object SetPrechargeButton: TButton
+        Left = 158
+        Top = 24
+        Width = 75
+        Height = 25
+        Caption = 'Set Precharge'
+        TabOrder = 2
+        OnClick = SetPrechargeButtonClick
+      end
+      object SetOnButton: TButton
+        Left = 239
+        Top = 24
+        Width = 65
+        Height = 25
+        Caption = 'Set On'
+        TabOrder = 3
+        OnClick = SetOnButtonClick
       end
       object SetAllStatesButton: TButton
-        Left = 399
-        Top = 32
+        Left = 320
+        Top = 24
         Width = 97
         Height = 25
         Caption = 'Set All States'
-        TabOrder = 2
+        TabOrder = 4
         OnClick = SetAllStatesButtonClick
       end
       object EnableBalancingCheck: TCheckBox
         Left = 520
-        Top = 36
+        Top = 28
         Width = 97
         Height = 17
         Caption = 'Enable Balancing'
@@ -437,7 +449,7 @@ object MainForm: TMainForm
           BevelOuter = bvNone
           TabOrder = 1
           object ClearHistoryButton: TButton
-            Left = 536
+            Left = 8
             Top = 5
             Width = 75
             Height = 25
@@ -445,7 +457,7 @@ object MainForm: TMainForm
             TabOrder = 0
           end
           object ExportHistoryButton: TButton
-            Left = 617
+            Left = 89
             Top = 5
             Width = 75
             Height = 25

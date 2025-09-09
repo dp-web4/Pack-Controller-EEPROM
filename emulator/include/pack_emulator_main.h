@@ -53,8 +53,10 @@ __published:	// IDE-managed Components
     
     // Module control
     TGroupBox *ControlGroup;
-    TRadioGroup *StateRadioGroup;
-    TButton *SetStateButton;
+    TButton *SetOffButton;
+    TButton *SetStandbyButton;
+    TButton *SetPrechargeButton;
+    TButton *SetOnButton;
     TButton *SetAllStatesButton;
     TCheckBox *EnableBalancingCheck;
     TEdit *BalancingMaskEdit;
@@ -130,7 +132,10 @@ __published:	// IDE-managed Components
     void __fastcall RegisterButtonClick(TObject *Sender);
     void __fastcall DeregisterButtonClick(TObject *Sender);
     void __fastcall DeregisterAllButtonClick(TObject *Sender);
-    void __fastcall SetStateButtonClick(TObject *Sender);
+    void __fastcall SetOffButtonClick(TObject *Sender);
+    void __fastcall SetStandbyButtonClick(TObject *Sender);
+    void __fastcall SetPrechargeButtonClick(TObject *Sender);
+    void __fastcall SetOnButtonClick(TObject *Sender);
     void __fastcall SetAllStatesButtonClick(TObject *Sender);
     void __fastcall ModuleListViewSelectItem(TObject *Sender, TListItem *Item, bool Selected);
     void __fastcall UpdateTimerTimer(TObject *Sender);
@@ -155,6 +160,7 @@ private:	// User declarations
     uint8_t selectedModuleId;
     uint8_t nextModuleToPoll;
     DWORD lastPollTime;
+    PackEmulator::ModuleState selectedState;  // Track the selected state for Set All
     
     // Cell detail polling
     bool pollingCellDetails;
@@ -188,7 +194,6 @@ private:	// User declarations
     void ShowError(const String& msg);
     void LoadConfiguration();
     void SaveConfiguration();
-    PackEmulator::ModuleState GetSelectedState();
     void SendModuleDiscoveryRequest();
     void SendModuleStatusRequest(uint8_t moduleId);
     

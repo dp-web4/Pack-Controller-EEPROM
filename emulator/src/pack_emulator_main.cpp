@@ -26,6 +26,7 @@ __fastcall TMainForm::TMainForm(TComponent* Owner)
     , selectedModuleId(0)
     , nextModuleToPoll(0)
     , lastPollTime(0)
+    , selectedState(PackEmulator::ModuleState::OFF)
     , pollingCellDetails(false)
     , nextCellToRequest(0)
     , lastCellRequestTime(0) {
@@ -228,14 +229,15 @@ void __fastcall TMainForm::DeregisterAllButtonClick(TObject *Sender) {
 }
 
 //---------------------------------------------------------------------------
-void __fastcall TMainForm::SetStateButtonClick(TObject *Sender) {
+void __fastcall TMainForm::SetOffButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
     }
     
-    PackEmulator::ModuleState state = GetSelectedState();
+    PackEmulator::ModuleState state = PackEmulator::ModuleState::OFF;
+    selectedState = state;  // Update for Set All button
     
     // Track the commanded state (but don't change actual state)
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(selectedModuleId);
@@ -247,15 +249,85 @@ void __fastcall TMainForm::SetStateButtonClick(TObject *Sender) {
     uint8_t stateCmd = static_cast<uint8_t>(state);
     canInterface->SendStateChange(selectedModuleId, stateCmd);
     
-    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to state " + IntToStr(stateCmd));
-    // Don't update display yet - wait for module response
-    // UpdateModuleDetails(selectedModuleId);
+    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to OFF");
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::SetStandbyButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    if (!selectedModuleId) {
+        ShowError("No module selected");
+        return;
+    }
+    
+    PackEmulator::ModuleState state = PackEmulator::ModuleState::STANDBY;
+    selectedState = state;  // Update for Set All button
+    
+    // Track the commanded state (but don't change actual state)
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(selectedModuleId);
+    if (module != NULL) {
+        module->commandedState = state;
+    }
+    
+    // Send state command to module
+    uint8_t stateCmd = static_cast<uint8_t>(state);
+    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    
+    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to STANDBY");
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::SetPrechargeButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    if (!selectedModuleId) {
+        ShowError("No module selected");
+        return;
+    }
+    
+    PackEmulator::ModuleState state = PackEmulator::ModuleState::PRECHARGE;
+    selectedState = state;  // Update for Set All button
+    
+    // Track the commanded state (but don't change actual state)
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(selectedModuleId);
+    if (module != NULL) {
+        module->commandedState = state;
+    }
+    
+    // Send state command to module
+    uint8_t stateCmd = static_cast<uint8_t>(state);
+    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    
+    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to PRECHARGE");
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::SetOnButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    if (!selectedModuleId) {
+        ShowError("No module selected");
+        return;
+    }
+    
+    PackEmulator::ModuleState state = PackEmulator::ModuleState::ON;
+    selectedState = state;  // Update for Set All button
+    
+    // Track the commanded state (but don't change actual state)
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(selectedModuleId);
+    if (module != NULL) {
+        module->commandedState = state;
+    }
+    
+    // Send state command to module
+    uint8_t stateCmd = static_cast<uint8_t>(state);
+    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    
+    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to ON");
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetAllStatesButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
-    PackEmulator::ModuleState state = GetSelectedState();
+    PackEmulator::ModuleState state = selectedState;  // Use the last selected state
     
     // Track the commanded state for all modules (but don't change actual state)
     std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
@@ -280,7 +352,10 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
     TListItem *Item, bool Selected) {
     (void)Sender;  // Suppress unused parameter warning
     if (Selected && Item) {
-        selectedModuleId = Item->Caption.ToInt();
+        // Extract module ID from "[ID]" format
+        String caption = Item->Caption;
+        caption = caption.SubString(2, caption.Length() - 2);  // Remove [ and ]
+        selectedModuleId = caption.ToInt();
         LogMessage("Selected module " + IntToStr(selectedModuleId));
         UpdateModuleDetails(selectedModuleId);
         
@@ -291,6 +366,15 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
             CellPollTimer->Enabled = true;
             // Reset the static flag in CellPollTimerTimer
             LogMessage("Restarted cell polling for newly selected module " + IntToStr(selectedModuleId));
+        }
+    } else if (!Selected && Item) {
+        // Handle deselection - extract module ID from "[ID]" format
+        String caption = Item->Caption;
+        caption = caption.SubString(2, caption.Length() - 2);  // Remove [ and ]
+        int moduleId = caption.ToInt();
+        if (selectedModuleId == moduleId) {
+            selectedModuleId = 0;
+            LogMessage("Module deselected");
         }
     }
 }
@@ -308,6 +392,14 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
     // Update selected module details
     if (selectedModuleId) {
         UpdateModuleDetails(selectedModuleId);
+    }
+    
+    // Update module list periodically to show message counts and status changes
+    static int listUpdateCounter = 0;
+    listUpdateCounter++;
+    if (listUpdateCounter >= 10) {  // Every 1 second (100ms timer * 10)
+        listUpdateCounter = 0;
+        UpdateModuleList();
     }
     
     // Broadcast highest allowed state to all registered modules
@@ -328,7 +420,7 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
             
             // Send maximum allowed state broadcast (0x517)
             // This tells all modules the highest state they're allowed to enter
-            uint8_t maxState = static_cast<uint8_t>(GetSelectedState());  // Use the state selected in UI
+            uint8_t maxState = static_cast<uint8_t>(selectedState);  // Use the last selected state
             uint8_t data[8] = {0};
             data[0] = maxState;  // Maximum allowed state
             
@@ -478,7 +570,8 @@ void TMainForm::UpdateModuleList() {
     for (size_t i = 0; i < modules.size(); i++) {
         PackEmulator::ModuleInfo* module = modules[i];
         TListItem* item = ModuleListView->Items->Add();
-        item->Caption = IntToStr(module->moduleId);
+        // Format module ID with brackets to make it look button-like
+        item->Caption = "[" + IntToStr(module->moduleId) + "]";
         
         // Add unique ID column
         String uniqueIdStr = "0x" + IntToHex((int)module->uniqueId, 8);
@@ -542,6 +635,11 @@ void TMainForm::UpdateModuleList() {
         // Color the entire row based on module status
         if (!module->isResponding) {
             item->ImageIndex = -1;  // Could use for icon if we had an ImageList
+        }
+        
+        // Select the item if it matches the currently selected module
+        if (module->moduleId == selectedModuleId) {
+            item->Selected = true;
         }
     }
     
@@ -1056,6 +1154,7 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
         module->cellCount = cellCount;  // Store expected cell count from STATUS_1
         module->isResponding = true;
         module->messageCount++;
+        module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
         
         // Initialize cell arrays if cell count changed
         if (cellCount > 0 && module->cellVoltages.size() != cellCount) {
@@ -1146,6 +1245,7 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         // Store the cell data
         module->cellVoltages[cellId] = cellVolt;
         module->cellTemperatures[cellId] = cellTemp;
+        module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
         
         LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) + 
                   ": " + FloatToStrF(cellVolt, ffFixed, 7, 3) + "V, " +
@@ -1189,6 +1289,7 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
         module->maxCellVoltage = hiVolt * 0.001f;   // CELL_VOLTAGE_FACTOR
         module->avgCellVoltage = avgVolt * 0.001f;  // CELL_VOLTAGE_FACTOR
         module->totalCellVoltage = totalVolt * 0.015f; // CELL_TOTAL_VOLTAGE_FACTOR
+        module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
         
         // Log only occasionally to avoid spam
         static int status2Count = 0;
@@ -1223,6 +1324,7 @@ void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
         
         // Update the main temperature with average
         module->temperature = module->avgCellTemp;
+        module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
         
         // Log only occasionally
         static int status3Count = 0;
@@ -1256,6 +1358,8 @@ void TMainForm::ProcessModuleCellCommStatus(uint8_t moduleId, const uint8_t* dat
                   " Max=" + IntToStr(module->cellCountMax) + " cells, Expected=" + IntToStr(module->cellCount) +
                   ", I2C Errors=" + IntToStr(module->cellI2CErrors));
         
+        module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
+        
         // Update UI
         UpdateModuleDetails(moduleId);
     }
@@ -1287,6 +1391,8 @@ void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
                   FloatToStrF(module->maxDischargeCurrent, ffFixed, 7, 1) + "A, MaxV=" +
                   FloatToStrF(module->maxChargeVoltage, ffFixed, 7, 2) + "V, HW=0x" +
                   IntToHex(hwVersion, 4));
+        
+        module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
     }
 }
 
@@ -1423,15 +1529,6 @@ void TMainForm::SaveConfiguration() {
     // TODO: Implement configuration saving
 }
 
-PackEmulator::ModuleState TMainForm::GetSelectedState() {
-    switch (StateRadioGroup->ItemIndex) {
-        case 0: return PackEmulator::ModuleState::OFF;
-        case 1: return PackEmulator::ModuleState::STANDBY;
-        case 2: return PackEmulator::ModuleState::PRECHARGE;
-        case 3: return PackEmulator::ModuleState::ON;
-        default: return PackEmulator::ModuleState::OFF;
-    }
-}
 
 void TMainForm::SendModuleDiscoveryRequest() {
     if (!isConnected) return;
