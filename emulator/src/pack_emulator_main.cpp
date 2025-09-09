@@ -25,7 +25,10 @@ __fastcall TMainForm::TMainForm(TComponent* Owner)
     , isConnected(false)
     , selectedModuleId(0)
     , nextModuleToPoll(0)
-    , lastPollTime(0) {
+    , lastPollTime(0)
+    , pollingCellDetails(false)
+    , nextCellToRequest(0)
+    , lastCellRequestTime(0) {
 }
 
 //---------------------------------------------------------------------------
@@ -233,33 +236,43 @@ void __fastcall TMainForm::SetStateButtonClick(TObject *Sender) {
     }
     
     PackEmulator::ModuleState state = GetSelectedState();
-    moduleManager->SetModuleState(selectedModuleId, state);
+    
+    // Track the commanded state (but don't change actual state)
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(selectedModuleId);
+    if (module != NULL) {
+        module->commandedState = state;
+    }
     
     // Send state command to module
     uint8_t stateCmd = static_cast<uint8_t>(state);
     canInterface->SendStateChange(selectedModuleId, stateCmd);
     
-    LogMessage("Set module " + IntToStr(selectedModuleId) + " to state " + IntToStr(stateCmd));
-    UpdateModuleDetails(selectedModuleId);
+    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to state " + IntToStr(stateCmd));
+    // Don't update display yet - wait for module response
+    // UpdateModuleDetails(selectedModuleId);
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetAllStatesButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
     PackEmulator::ModuleState state = GetSelectedState();
-    moduleManager->SetAllModulesState(state);
     
-    // Send to all registered modules
+    // Track the commanded state for all modules (but don't change actual state)
     std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
     uint8_t stateCmd = static_cast<uint8_t>(state);
     
     for (size_t i = 0; i < moduleIds.size(); i++) {
         uint8_t id = moduleIds[i];
+        PackEmulator::ModuleInfo* module = moduleManager->GetModule(id);
+        if (module != NULL) {
+            module->commandedState = state;
+        }
         canInterface->SendStateChange(id, stateCmd);
     }
     
-    LogMessage("Set all modules to state " + IntToStr(stateCmd));
-    UpdateModuleList();
+    LogMessage("Commanding all modules to state " + IntToStr(stateCmd));
+    // Don't update display yet - wait for module responses
+    // UpdateModuleList();
 }
 
 //---------------------------------------------------------------------------
@@ -268,7 +281,17 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
     (void)Sender;  // Suppress unused parameter warning
     if (Selected && Item) {
         selectedModuleId = Item->Caption.ToInt();
+        LogMessage("Selected module " + IntToStr(selectedModuleId));
         UpdateModuleDetails(selectedModuleId);
+        
+        // If Cells tab is already selected, restart polling with new module
+        if (DetailsPageControl->ActivePage == CellsTab && isConnected) {
+            pollingCellDetails = true;
+            nextCellToRequest = 0;
+            CellPollTimer->Enabled = true;
+            // Reset the static flag in CellPollTimerTimer
+            LogMessage("Restarted cell polling for newly selected module " + IntToStr(selectedModuleId));
+        }
     }
 }
 
@@ -503,16 +526,18 @@ void TMainForm::UpdateModuleList() {
         String socStr = FloatToStrF(soc, ffFixed, 7, 1) + "%";
         item->SubItems->Add(socStr);
         
-        // Add cell count
-        size_t cellCount = module->cellVoltages.size();
-        if (cellCount == 0) {
-            item->SubItems->Add("-");
+        // Add cell count (min/max/expected)
+        if (module->cellCount > 0 || module->cellCountMin > 0 || module->cellCountMax > 0) {
+            String cellStr = IntToStr(module->cellCountMin) + "/" + 
+                           IntToStr(module->cellCountMax) + "/" +
+                           IntToStr(module->cellCount);
+            item->SubItems->Add(cellStr);
         } else {
-            item->SubItems->Add(IntToStr((int)cellCount));
+            item->SubItems->Add("-/-/-");
         }
         
         // Add message count to debug if we're receiving data
-        item->SubItems->Add("Msgs:" + IntToStr((int)module->messageCount));
+        item->SubItems->Add(IntToStr((int)module->messageCount));
         
         // Color the entire row based on module status
         if (!module->isResponding) {
@@ -541,7 +566,7 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     SOHLabel->Caption = "SOH: " + FloatToStrF(module->soh, ffFixed, 7, 1) + " %";
     
     // Update StatusGrid with additional module information
-    StatusGrid->RowCount = 12;  // Increase rows for more data
+    StatusGrid->RowCount = 13;  // Increase rows for more data
     StatusGrid->Cells[0][0] = "Property";
     StatusGrid->Cells[1][0] = "Value";
     
@@ -557,7 +582,20 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
         case PackEmulator::ModuleState::ON: stateStr = "ON"; break;
         default: stateStr = "UNKNOWN"; break;
     }
-    StatusGrid->Cells[1][2] = stateStr;
+    // Show commanded state if different from actual
+    if (module->commandedState != module->state) {
+        String cmdStr;
+        switch(module->commandedState) {
+            case PackEmulator::ModuleState::OFF: cmdStr = "OFF"; break;
+            case PackEmulator::ModuleState::STANDBY: cmdStr = "STANDBY"; break;
+            case PackEmulator::ModuleState::PRECHARGE: cmdStr = "PRECHARGE"; break;
+            case PackEmulator::ModuleState::ON: cmdStr = "ON"; break;
+            default: cmdStr = "UNKNOWN"; break;
+        }
+        StatusGrid->Cells[1][2] = stateStr + " (Cmd: " + cmdStr + ")";
+    } else {
+        StatusGrid->Cells[1][2] = stateStr;
+    }
     
     StatusGrid->Cells[0][3] = "Min Cell V";
     StatusGrid->Cells[1][3] = FloatToStrF(module->minCellVoltage, ffFixed, 7, 3) + " V";
@@ -585,6 +623,15 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     
     StatusGrid->Cells[0][11] = "Max Discharge I";
     StatusGrid->Cells[1][11] = FloatToStrF(module->maxDischargeCurrent, ffFixed, 7, 1) + " A";
+    
+    StatusGrid->Cells[0][12] = "Cell Count";
+    if (module->cellCountMin > 0 || module->cellCountMax > 0) {
+        StatusGrid->Cells[1][12] = "Exp:" + IntToStr(module->cellCount) + 
+                                   " Min:" + IntToStr(module->cellCountMin) +
+                                   " Max:" + IntToStr(module->cellCountMax);
+    } else {
+        StatusGrid->Cells[1][12] = "Exp:" + IntToStr(module->cellCount) + " (No comm data)";
+    }
     
     // Update cell display
     UpdateCellDisplay(moduleId);
@@ -657,15 +704,31 @@ void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
         return;
     }
     
-    CellGrid->RowCount = module->cellVoltages.size() + 1;
-    CellGrid->Cells[0][0] = "Cell";
-    CellGrid->Cells[1][0] = "Voltage";
-    CellGrid->Cells[2][0] = "Temperature";
+    // Use expected cell count if available, otherwise use actual array size
+    int cellCount = module->cellCount > 0 ? module->cellCount : module->cellVoltages.size();
     
-    for (size_t i = 0; i < module->cellVoltages.size(); i++) {
-        CellGrid->Cells[0][i + 1] = IntToStr((int)(i + 1));
-        CellGrid->Cells[1][i + 1] = FloatToStrF(module->cellVoltages[i], ffFixed, 7, 3);
-        CellGrid->Cells[2][i + 1] = FloatToStrF(module->cellTemperatures[i], ffFixed, 7, 1);
+    // Ensure arrays are sized correctly
+    if (module->cellVoltages.size() < cellCount) {
+        module->cellVoltages.resize(cellCount, 0.0f);
+        module->cellTemperatures.resize(cellCount, 0.0f);
+    }
+    
+    CellGrid->RowCount = cellCount + 1;
+    CellGrid->Cells[0][0] = "Cell";
+    CellGrid->Cells[1][0] = "Voltage (V)";
+    CellGrid->Cells[2][0] = "Temp (°C)";
+    
+    for (int i = 0; i < cellCount; i++) {
+        CellGrid->Cells[0][i + 1] = IntToStr(i + 1);
+        
+        // Show 0.000 for missing cells (not communicating)
+        if (module->cellVoltages[i] == 0.0f) {
+            CellGrid->Cells[1][i + 1] = "0.000";
+            CellGrid->Cells[2][i + 1] = "0.0";
+        } else {
+            CellGrid->Cells[1][i + 1] = FloatToStrF(module->cellVoltages[i], ffFixed, 7, 3);
+            CellGrid->Cells[2][i + 1] = FloatToStrF(module->cellTemperatures[i], ffFixed, 7, 1);
+        }
     }
 }
 
@@ -732,6 +795,9 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
             break;
         case ID_MODULE_DETAIL:
             description = " [Module Detail]";
+            break;
+        case ID_MODULE_CELL_COMM_STATUS1:
+            description = " [Cell Comm Status]";
             break;
         case ID_MODULE_CELL_VOLTAGE:
             description = " [Cell Voltage]";
@@ -909,8 +975,15 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     }
     // Check for module detail messages
     else if (canId == ID_MODULE_DETAIL) {
-        uint8_t moduleId = msg.data[0];
-        ProcessModuleDetail(moduleId, msg.data);
+        // Module ID comes from extended CAN ID, not from data
+        uint8_t cellId = msg.data[0];
+        LogMessage("← 0x505 MODULE_DETAIL from module " + IntToStr(moduleIdFromExtended) + 
+                  " for cell " + IntToStr(cellId));
+        ProcessModuleDetail(moduleIdFromExtended, msg.data);
+    }
+    // Check for cell comm status messages
+    else if (canId == ID_MODULE_CELL_COMM_STATUS1) {
+        ProcessModuleCellCommStatus(moduleIdFromExtended, msg.data);
     }
 }
 
@@ -980,13 +1053,14 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
         module->soh = soh;
         module->voltage = voltage;
         module->current = current;
+        module->cellCount = cellCount;  // Store expected cell count from STATUS_1
         module->isResponding = true;
         module->messageCount++;
         
         // Initialize cell arrays if cell count changed
         if (cellCount > 0 && module->cellVoltages.size() != cellCount) {
-            module->cellVoltages.resize(cellCount, 3.2f);  // Default 3.2V per cell
-            module->cellTemperatures.resize(cellCount, 25.0f);  // Default 25°C
+            module->cellVoltages.resize(cellCount, 0.0f);  // 0V for missing cells
+            module->cellTemperatures.resize(cellCount, 0.0f);  // 0°C for missing cells
         }
         
         // Update the module list display to show new data
@@ -1031,17 +1105,56 @@ void TMainForm::ProcessModuleFault(uint8_t moduleId, const uint8_t* data) {
 }
 
 void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
-    (void)data;  // Suppress unused parameter warning - TODO: implement detail parsing
-    // Process detailed module information
-    // data[1]: Number of cells
-    // data[2]: Module type/version
-    // data[3-4]: Capacity
-    // data[5-6]: Cycle count
+    // Parse MODULE_DETAIL (0x505) according to ModuleCPU code:
+    // Byte 0: Cell ID
+    // Byte 1: Expected cell count  
+    // Bytes 2-3: Cell temperature (16 bits, 0.01°C per bit, -55.35°C offset)
+    // Bytes 4-5: Cell voltage (16 bits, 0.001V per bit)
+    // Byte 6: Cell SOC (0.5% per bit)
+    // Byte 7: Cell SOH (0.5% per bit)
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
-        LogMessage("Module " + IntToStr(moduleId) + " detail received");
-        UpdateModuleDetails(moduleId);
+        uint8_t cellId = data[0];
+        uint8_t expectedCount = data[1];
+        
+        // Initialize arrays to expected size if needed (with default values for missing cells)
+        if (module->cellVoltages.size() < expectedCount) {
+            module->cellVoltages.resize(expectedCount, 0.0f);
+            module->cellTemperatures.resize(expectedCount, 0.0f);
+        }
+        
+        // Check if cell ID is valid
+        if (cellId >= expectedCount) {
+            LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) + 
+                      " out of range (expected " + IntToStr(expectedCount) + " cells)");
+            return;
+        }
+        
+        // Parse temperature (little-endian, with -55.35°C offset)
+        uint16_t tempRaw = data[2] | (data[3] << 8);
+        float cellTemp = (tempRaw * 0.01f) - 55.35f;
+        
+        // Parse voltage (little-endian, 0.001V per bit)
+        uint16_t voltRaw = data[4] | (data[5] << 8);
+        float cellVolt = voltRaw * 0.001f;
+        
+        // Parse SOC and SOH
+        float cellSOC = data[6] * 0.5f;
+        float cellSOH = data[7] * 0.5f;
+        
+        // Store the cell data
+        module->cellVoltages[cellId] = cellVolt;
+        module->cellTemperatures[cellId] = cellTemp;
+        
+        LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) + 
+                  ": " + FloatToStrF(cellVolt, ffFixed, 7, 3) + "V, " +
+                  FloatToStrF(cellTemp, ffFixed, 7, 1) + "°C");
+        
+        // Update display if this module is selected
+        if (moduleId == selectedModuleId) {
+            UpdateCellDisplay(moduleId);
+        }
     }
 }
 
@@ -1110,6 +1223,33 @@ void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
     }
 }
 
+void TMainForm::ProcessModuleCellCommStatus(uint8_t moduleId, const uint8_t* data) {
+    // Parse MODULE_CELL_COMM_STATUS1 according to ModuleCPU code:
+    // Byte 0: cellCountMin (fewest cells received)
+    // Byte 1: cellCountMax (most cells received)
+    // Bytes 2-3: cellI2CErrors (16 bits, little-endian)
+    // Byte 4: MCRXFramingErrors
+    // Byte 5: FirstCellWithI2CError (0xFF = none)
+    // Bytes 6-7: UNUSED
+    
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        module->cellCountMin = data[0];
+        module->cellCountMax = data[1];
+        module->cellI2CErrors = data[2] | (data[3] << 8);
+        
+        uint8_t mcRxErrors = data[4];
+        uint8_t firstErrorCell = data[5];
+        
+        LogMessage("Module " + IntToStr(moduleId) + " CELL_COMM: Min=" + IntToStr(module->cellCountMin) +
+                  " Max=" + IntToStr(module->cellCountMax) + " cells, Expected=" + IntToStr(module->cellCount) +
+                  ", I2C Errors=" + IntToStr(module->cellI2CErrors));
+        
+        // Update UI
+        UpdateModuleDetails(moduleId);
+    }
+}
+
 void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
     // Parse MODULE_HARDWARE according to can_frm_mod.h:
     // Bytes 0-1: maxChargeA (16 bits, 0.1A per bit)
@@ -1154,6 +1294,107 @@ void TMainForm::LogMessage(const String& msg) {
     // Alternative method: Set selection to end
     HistoryMemo->SelStart = HistoryMemo->Text.Length();
     HistoryMemo->SelLength = 0;
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::DetailsPageControlChange(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    
+    // Check if Cells tab is selected
+    if (DetailsPageControl->ActivePage == CellsTab) {
+        LogMessage("Cells tab selected. Module ID: " + IntToStr(selectedModuleId) + 
+                  ", Connected: " + String(isConnected ? "Yes" : "No"));
+        
+        // Start polling cell details if we have a selected module
+        if (selectedModuleId > 0 && isConnected) {
+            pollingCellDetails = true;
+            nextCellToRequest = 0;
+            CellPollTimer->Enabled = true;
+            LogMessage("Started polling cell details for module " + IntToStr(selectedModuleId));
+        } else {
+            LogMessage("Cannot start polling: Need to select a module and be connected");
+        }
+    } else {
+        // Stop polling cell details when leaving Cells tab
+        if (pollingCellDetails) {
+            pollingCellDetails = false;
+            CellPollTimer->Enabled = false;
+            LogMessage("Stopped polling cell details");
+        }
+    }
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::CellPollTimerTimer(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    
+    static int timerCallCount = 0;
+    if (timerCallCount++ < 5) {
+        LogMessage("CellPollTimer called. Polling: " + String(pollingCellDetails ? "Yes" : "No") +
+                  ", Connected: " + String(isConnected ? "Yes" : "No") +
+                  ", Module: " + IntToStr(selectedModuleId));
+    }
+    
+    // Check if we should be polling
+    if (!pollingCellDetails || !isConnected || selectedModuleId == 0) {
+        if (timerCallCount <= 5) {
+            LogMessage("Stopping timer - conditions not met");
+        }
+        CellPollTimer->Enabled = false;
+        timerCallCount = 0;  // Reset counter
+        return;
+    }
+    
+    // Get module info to know how many cells to request
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(selectedModuleId);
+    if (module == NULL) {
+        return;
+    }
+    
+    // Use expected cell count if available, otherwise use what we've seen
+    uint8_t cellCount = module->cellCount;
+    if (cellCount == 0) {
+        cellCount = module->cellCountMax;
+    }
+    if (cellCount == 0) {
+        return;  // No cells to poll
+    }
+    
+    // Log cell count once
+    static bool loggedCellCount = false;
+    if (!loggedCellCount) {
+        LogMessage("Polling " + IntToStr(cellCount) + " cells for module " + IntToStr(selectedModuleId));
+        loggedCellCount = true;
+    }
+    
+    // Send detail request for next cell
+    bool success = canInterface->SendDetailRequest(selectedModuleId, nextCellToRequest);
+    
+    // Log the request (log all cells for first round, then stop)
+    static int completedRounds = 0;
+    if (completedRounds < 1) {
+        LogMessage("→ Sent DETAIL_REQUEST to module " + IntToStr(selectedModuleId) + 
+                  " for cell " + IntToStr(nextCellToRequest) + 
+                  (success ? " (success)" : " (failed)"));
+        
+        // Also log any error from CAN interface
+        std::string canError = canInterface->GetLastError();
+        if (!canError.empty() && canError.find("SendDetailRequest") != std::string::npos) {
+            LogMessage("  CAN Frame: " + String(canError.c_str()));
+        }
+    }
+    
+    // Move to next cell for next poll
+    nextCellToRequest++;
+    if (nextCellToRequest >= cellCount) {
+        nextCellToRequest = 0;  // Wrap around to first cell
+        completedRounds++;  // Increment after full round
+        if (completedRounds == 1) {
+            LogMessage("Completed first round of cell polling, stopping log spam");
+        }
+    }
+    
+    lastCellRequestTime = GetTickCount();
 }
 
 void TMainForm::ShowError(const String& msg) {
@@ -1226,6 +1467,11 @@ void __fastcall TMainForm::PollTimerTimer(TObject *Sender) {
     (void)Sender;
     
     if (!isConnected) return;
+    
+    // Don't send status requests while polling cell details
+    if (pollingCellDetails) {
+        return;
+    }
     
     // Get registered modules
     std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();

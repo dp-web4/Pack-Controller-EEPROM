@@ -100,6 +100,7 @@ __published:	// IDE-managed Components
     TTimer *TimeoutTimer;
     TTimer *DiscoveryTimer;
     TTimer *PollTimer;
+    TTimer *CellPollTimer;
     
     // Menus
     TMainMenu *MainMenu;
@@ -136,6 +137,7 @@ __published:	// IDE-managed Components
     void __fastcall TimeoutTimerTimer(TObject *Sender);
     void __fastcall DiscoveryTimerTimer(TObject *Sender);
     void __fastcall PollTimerTimer(TObject *Sender);
+    void __fastcall CellPollTimerTimer(TObject *Sender);
     void __fastcall DistributeKeysButtonClick(TObject *Sender);
     void __fastcall ClearHistoryButtonClick(TObject *Sender);
     void __fastcall ExportHistoryButtonClick(TObject *Sender);
@@ -143,6 +145,7 @@ __published:	// IDE-managed Components
     void __fastcall ExitItemClick(TObject *Sender);
     void __fastcall FormCreate(TObject *Sender);
     void __fastcall FormDestroy(TObject *Sender);
+    void __fastcall DetailsPageControlChange(TObject *Sender);
     
 private:	// User declarations
     PackEmulator::ModuleManager* moduleManager;
@@ -152,6 +155,11 @@ private:	// User declarations
     uint8_t selectedModuleId;
     uint8_t nextModuleToPoll;
     DWORD lastPollTime;
+    
+    // Cell detail polling
+    bool pollingCellDetails;
+    uint8_t nextCellToRequest;
+    DWORD lastCellRequestTime;
     
     // UI update functions
     void UpdateModuleList();
@@ -173,6 +181,7 @@ private:	// User declarations
     void ProcessCellTemperatures(uint8_t moduleId, const uint8_t* data);
     void ProcessModuleFault(uint8_t moduleId, const uint8_t* data);
     void ProcessModuleDetail(uint8_t moduleId, const uint8_t* data);
+    void ProcessModuleCellCommStatus(uint8_t moduleId, const uint8_t* data);
     
     // Helper functions
     void LogMessage(const String& msg);

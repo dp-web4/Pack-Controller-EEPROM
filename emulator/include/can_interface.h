@@ -66,6 +66,7 @@ public:
     bool SendRegistrationAck(uint8_t moduleId, bool accepted);
     bool SendTimeSync(uint32_t timestamp);
     bool SendWeb4KeyChunk(uint8_t moduleId, uint8_t chunkNum, const uint8_t* chunk);
+    bool SendDetailRequest(uint8_t moduleId, uint8_t cellId);
     
     // Message reception
     void SetCallback(CANCallbackInterface* callback) { callbackInterface = callback; }

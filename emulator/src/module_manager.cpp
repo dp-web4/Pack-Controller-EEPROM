@@ -62,6 +62,7 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.moduleId = moduleId;
     module.uniqueId = uniqueId;
     module.state = ModuleState::OFF;
+    module.commandedState = ModuleState::OFF;
     module.isRegistered = true;
     module.isResponding = true;
     module.statusPending = false;
@@ -76,6 +77,12 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.temperature = 25.0f;
     module.soc = 0.0f;
     module.soh = 100.0f;
+    
+    // Initialize cell count data
+    module.cellCount = 0;      // Will be updated from STATUS_1
+    module.cellCountMin = 0;   // Will be updated from CELL_COMM_STATUS
+    module.cellCountMax = 0;   // Will be updated from CELL_COMM_STATUS  
+    module.cellI2CErrors = 0;
     
     // Initialize cell statistics
     module.minCellVoltage = 0.0f;

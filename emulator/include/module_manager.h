@@ -41,7 +41,8 @@ enum class ModuleState {
 struct ModuleInfo {
     uint8_t moduleId;
     uint32_t uniqueId;
-    ModuleState state;
+    ModuleState state;          // Actual reported state from module
+    ModuleState commandedState; // Last commanded state sent to module
     bool isRegistered;
     bool isResponding;
     bool statusPending;
@@ -71,6 +72,10 @@ struct ModuleInfo {
     uint16_t hardwareVersion;  // Hardware version
     
     // Cell data
+    uint8_t cellCount;      // Expected number of cells (from STATUS_1)
+    uint8_t cellCountMin;   // Minimum cells seen (from CELL_COMM_STATUS)
+    uint8_t cellCountMax;   // Maximum cells seen (from CELL_COMM_STATUS)
+    uint16_t cellI2CErrors; // I2C error count (from CELL_COMM_STATUS)
     std::vector<float> cellVoltages;
     std::vector<float> cellTemperatures;
     

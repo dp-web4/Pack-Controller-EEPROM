@@ -3,7 +3,7 @@ object MainForm: TMainForm
   Top = 0
   Caption = 'Pack Controller Emulator'
   ClientHeight = 600
-  ClientWidth = 1000
+  ClientWidth = 1100
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -19,7 +19,7 @@ object MainForm: TMainForm
   object TopPanel: TPanel
     Left = 0
     Top = 0
-    Width = 1000
+    Width = 1100
     Height = 45
     Align = alTop
     TabOrder = 0
@@ -111,14 +111,14 @@ object MainForm: TMainForm
   object LeftPanel: TPanel
     Left = 0
     Top = 45
-    Width = 450
+    Width = 550
     Height = 536
     Align = alLeft
     TabOrder = 1
     object ModulesGroup: TGroupBox
       Left = 1
       Top = 1
-      Width = 448
+      Width = 548
       Height = 490
       Align = alClient
       Caption = ' Battery Modules '
@@ -126,7 +126,7 @@ object MainForm: TMainForm
       object ModuleListView: TListView
         Left = 2
         Top = 15
-        Width = 444
+        Width = 544
         Height = 432
         Align = alClient
         Columns = <
@@ -167,8 +167,13 @@ object MainForm: TMainForm
           end
           item
             AutoSize = True
-            Caption = 'CLS'
-            MinWidth = 35
+            Caption = 'Cells (Min/Max/Exp)'
+            MinWidth = 90
+          end
+          item
+            AutoSize = True
+            Caption = 'Messages'
+            MinWidth = 60
           end>
         GridLines = True
         ReadOnly = True
@@ -180,7 +185,7 @@ object MainForm: TMainForm
       object ButtonPanel: TPanel
         Left = 2
         Top = 447
-        Width = 444
+        Width = 544
         Height = 41
         Align = alBottom
         BevelOuter = bvNone
@@ -227,7 +232,7 @@ object MainForm: TMainForm
     end
   end
   object CenterPanel: TPanel
-    Left = 450
+    Left = 550
     Top = 45
     Width = 550
     Height = 536
@@ -299,6 +304,7 @@ object MainForm: TMainForm
       ActivePage = StatusTab
       Align = alClient
       TabOrder = 1
+      OnChange = DetailsPageControlChange
       object StatusTab: TTabSheet
         Caption = 'Status'
         object VoltageLabel: TLabel
@@ -503,7 +509,7 @@ object MainForm: TMainForm
   object BottomPanel: TPanel
     Left = 0
     Top = 581
-    Width = 1000
+    Width = 1100
     Height = 19
     Align = alBottom
     TabOrder = 3
@@ -563,9 +569,16 @@ object MainForm: TMainForm
     Left = 920
     Top = 248
   end
-  object MainMenu: TMainMenu
+  object CellPollTimer: TTimer
+    Enabled = False
+    Interval = 50
+    OnTimer = CellPollTimerTimer
     Left = 920
     Top = 296
+  end
+  object MainMenu: TMainMenu
+    Left = 920
+    Top = 344
     object FileMenu: TMenuItem
       Caption = '&File'
       object SaveConfigItem: TMenuItem

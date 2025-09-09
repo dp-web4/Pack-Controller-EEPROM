@@ -191,6 +191,33 @@ bool CANInterface::SendWeb4KeyChunk(uint8_t moduleId, uint8_t chunkNum, const ui
     return SendMessage(canId, chunk, 8, true); // Already using extended ID for chunking
 }
 
+bool CANInterface::SendDetailRequest(uint8_t moduleId, uint8_t cellId) {
+    // Send MODULE_DETAIL_REQUEST (0x515) to request cell details
+    // The Pack Controller uses extended frames with:
+    // - Standard ID (bits 28-18): ID_MODULE_DETAIL_REQUEST (0x515)
+    // - Extended ID (bits 17-0): Module ID
+    
+    // Build extended CAN ID
+    uint32_t extendedId = ((uint32_t)ID_MODULE_DETAIL_REQUEST << 18) | moduleId;
+    
+    // Data format: Byte 0 = module ID, Byte 1 = cell ID, Byte 2 = unused
+    uint8_t data[3] = {0};
+    data[0] = moduleId;
+    data[1] = cellId;
+    data[2] = 0;  // Unused
+    
+    // Log the actual CAN frame being sent (for debugging)
+    static int logCount = 0;
+    if (logCount++ < 20) {  // Log first 20 to see all cells
+        char logMsg[256];
+        sprintf(logMsg, "SendDetailRequest: ExtID=0x%08X, Data=[%02X %02X %02X]", 
+                extendedId, data[0], data[1], data[2]);
+        SetError(logMsg);  // Use SetError to log for debugging
+    }
+    
+    return SendMessage(extendedId, data, 3, true);  // true = extended frame
+}
+
 void CANInterface::SetFilterForModules(uint32_t baseId, uint32_t mask) {
     if (!connected) {
         return;
