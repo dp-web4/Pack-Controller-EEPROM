@@ -563,6 +563,11 @@ void __fastcall TMainForm::ExitItemClick(TObject *Sender) {
 //---------------------------------------------------------------------------
 
 void TMainForm::UpdateModuleList() {
+    // Temporarily disable the selection event handler to prevent re-triggering
+    // when we programmatically select an item
+    TLVSelectItemEvent savedHandler = ModuleListView->OnSelectItem;
+    ModuleListView->OnSelectItem = NULL;
+    
     ModuleListView->Items->BeginUpdate();
     ModuleListView->Items->Clear();
     
@@ -644,6 +649,9 @@ void TMainForm::UpdateModuleList() {
     }
     
     ModuleListView->Items->EndUpdate();
+    
+    // Restore the selection event handler
+    ModuleListView->OnSelectItem = savedHandler;
 }
 
 void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
@@ -1360,8 +1368,10 @@ void TMainForm::ProcessModuleCellCommStatus(uint8_t moduleId, const uint8_t* dat
         
         module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
         
-        // Update UI
-        UpdateModuleDetails(moduleId);
+        // Only update UI if this is the selected module
+        if (moduleId == selectedModuleId) {
+            UpdateModuleDetails(moduleId);
+        }
     }
 }
 
