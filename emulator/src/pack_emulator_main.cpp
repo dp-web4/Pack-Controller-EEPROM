@@ -1662,10 +1662,8 @@ void TMainForm::SendHeartbeatMessage() {
         }
     }
     
-    // If no modules or all OFF, still allow at least STANDBY
-    if (maxState == 0 && moduleIds.size() > 0) {
-        maxState = 1;  // STANDBY
-    }
+    // If no modules registered, default to OFF
+    // The heartbeat should reflect the actual commanded state, not force a minimum
     
     // Send MODULE_MAX_STATE (0x517) - Heartbeat with highest allowed state
     uint8_t data[1] = {0};
