@@ -84,6 +84,12 @@ struct ModuleInfo {
     uint32_t messageCount;
     uint32_t errorCount;
     
+    // Message waiting flags to prevent flooding
+    bool waitingForStatusResponse;   // Waiting for STATUS_1/2/3 after STATUS_REQUEST
+    bool waitingForCellResponse;     // Waiting for MODULE_DETAIL after DETAIL_REQUEST
+    DWORD statusRequestTime;         // When we sent the status request
+    DWORD cellRequestTime;           // When we sent the cell detail request
+    
     // Web4 data
     bool hasWeb4Keys;
     uint8_t web4DeviceKeyHalf[64];

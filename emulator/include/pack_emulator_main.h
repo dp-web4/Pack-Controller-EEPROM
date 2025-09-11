@@ -143,6 +143,7 @@ __published:	// IDE-managed Components
     void __fastcall DiscoveryTimerTimer(TObject *Sender);
     void __fastcall PollTimerTimer(TObject *Sender);
     void __fastcall CellPollTimerTimer(TObject *Sender);
+    void __fastcall MessagePollTimerTimer(TObject *Sender);
     void __fastcall DistributeKeysButtonClick(TObject *Sender);
     void __fastcall ClearHistoryButtonClick(TObject *Sender);
     void __fastcall ExportHistoryButtonClick(TObject *Sender);
@@ -167,12 +168,45 @@ private:	// User declarations
     uint8_t nextCellToRequest;
     DWORD lastCellRequestTime;
     
+    // Message request flags for prioritized sending
+    struct MessageFlags {
+        volatile bool stateChange;      // Priority 1 - HIGHEST (safety-critical)
+        volatile bool heartbeat;        // Priority 2 - Important for connection
+        volatile bool cellDetail;       // Priority 3
+        volatile bool statusRequest;    // Priority 4
+        volatile bool registration;     // Priority 5
+        volatile bool timeSync;         // Priority 6
+        volatile bool discovery;        // Priority 7 - Lowest
+        
+        // Additional data for specific messages
+        uint8_t cellModuleId;
+        uint8_t cellId;
+        uint8_t statusModuleId;
+        uint8_t registrationModuleId;
+        uint32_t registrationUniqueId;
+        uint8_t stateChangeModuleId;
+        uint8_t stateChangeNewState;
+    } messageFlags;
+    
+    // Message polling timer
+    TTimer *MessagePollTimer;
+    
     // UI update functions
     void UpdateModuleList();
     void UpdateModuleDetails(uint8_t moduleId);
     void UpdateStatusDisplay();
     void UpdateCellDisplay(uint8_t moduleId);
     void UpdateConnectionStatus(bool connected);
+    
+    // Message sending handlers
+    void ProcessMessageQueue();
+    void SendHeartbeatMessage();
+    void SendStateChangeMessage();
+    void SendCellDetailRequest();
+    void SendStatusRequest();
+    void SendRegistrationAck();
+    void SendTimeSync();
+    void SendDiscoveryRequest();
     
     // CAN callbacks
     void OnCANMessage(const PackEmulator::CANMessage& msg);

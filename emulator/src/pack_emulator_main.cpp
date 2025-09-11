@@ -30,6 +30,8 @@ __fastcall TMainForm::TMainForm(TComponent* Owner)
     , pollingCellDetails(false)
     , nextCellToRequest(0)
     , lastCellRequestTime(0) {
+    // Initialize message flags
+    memset(&messageFlags, 0, sizeof(messageFlags));
 }
 
 //---------------------------------------------------------------------------
@@ -62,6 +64,12 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     
     TimeoutTimer->Interval = 1000;  // 1 Hz timeout check
     TimeoutTimer->Enabled = true;
+    
+    // Create and configure message poll timer
+    MessagePollTimer = new TTimer(this);
+    MessagePollTimer->Interval = 10;  // 10ms for fast message processing
+    MessagePollTimer->OnTimer = MessagePollTimerTimer;
+    MessagePollTimer->Enabled = false;  // Will be enabled when connected
     
     LogMessage("Pack Controller Emulator initialized");
 }
@@ -122,6 +130,7 @@ void __fastcall TMainForm::ConnectButtonClick(TObject *Sender) {
         // Start timers
         DiscoveryTimer->Enabled = true;
         PollTimer->Enabled = true;
+        MessagePollTimer->Enabled = true;  // Start message processing
         
         // Send initial discovery request
         SendModuleDiscoveryRequest();
@@ -146,6 +155,7 @@ void __fastcall TMainForm::DisconnectButtonClick(TObject *Sender) {
     // Stop timers
     DiscoveryTimer->Enabled = false;
     PollTimer->Enabled = false;
+    MessagePollTimer->Enabled = false;  // Stop message processing
     
     // Disable controls
     DiscoverButton->Enabled = false;
@@ -168,7 +178,7 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
         // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
         uint32_t announceExtId = ((uint32_t)ID_MODULE_ANNOUNCE_REQUEST << 18) | 0;  // 0x51D -> 0x14740000
         if (canInterface->SendMessage(announceExtId, data, 8, true)) {
-            LogMessage("→ 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + 
+            LogMessage("-> 0x" + IntToHex((int)ID_MODULE_ANNOUNCE_REQUEST, 3) + 
                       " [Discovery Request] Broadcasting to all modules");
         } else {
             LogMessage("✗ Failed to send discovery request: " + String(canInterface->GetLastError().c_str()));
@@ -231,6 +241,10 @@ void __fastcall TMainForm::DeregisterAllButtonClick(TObject *Sender) {
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetOffButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+    if (!isConnected) {
+        ShowError("Not connected to CAN bus");
+        return;
+    }
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -245,16 +259,21 @@ void __fastcall TMainForm::SetOffButtonClick(TObject *Sender) {
         module->commandedState = state;
     }
     
-    // Send state command to module
-    uint8_t stateCmd = static_cast<uint8_t>(state);
-    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    // Queue state command using message flags
+    messageFlags.stateChangeModuleId = selectedModuleId;
+    messageFlags.stateChangeNewState = static_cast<uint8_t>(state);
+    messageFlags.stateChange = true;
     
-    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to OFF");
+    LogMessage("Queueing state change for module " + IntToStr(selectedModuleId) + " to OFF");
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetStandbyButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+    if (!isConnected) {
+        ShowError("Not connected to CAN bus");
+        return;
+    }
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -269,16 +288,21 @@ void __fastcall TMainForm::SetStandbyButtonClick(TObject *Sender) {
         module->commandedState = state;
     }
     
-    // Send state command to module
-    uint8_t stateCmd = static_cast<uint8_t>(state);
-    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    // Queue state command using message flags
+    messageFlags.stateChangeModuleId = selectedModuleId;
+    messageFlags.stateChangeNewState = static_cast<uint8_t>(state);
+    messageFlags.stateChange = true;
     
-    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to STANDBY");
+    LogMessage("Queueing state change for module " + IntToStr(selectedModuleId) + " to STANDBY");
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetPrechargeButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+    if (!isConnected) {
+        ShowError("Not connected to CAN bus");
+        return;
+    }
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -293,16 +317,21 @@ void __fastcall TMainForm::SetPrechargeButtonClick(TObject *Sender) {
         module->commandedState = state;
     }
     
-    // Send state command to module
-    uint8_t stateCmd = static_cast<uint8_t>(state);
-    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    // Queue state command using message flags
+    messageFlags.stateChangeModuleId = selectedModuleId;
+    messageFlags.stateChangeNewState = static_cast<uint8_t>(state);
+    messageFlags.stateChange = true;
     
-    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to PRECHARGE");
+    LogMessage("Queueing state change for module " + IntToStr(selectedModuleId) + " to PRECHARGE");
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetOnButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+    if (!isConnected) {
+        ShowError("Not connected to CAN bus");
+        return;
+    }
     if (!selectedModuleId) {
         ShowError("No module selected");
         return;
@@ -317,16 +346,21 @@ void __fastcall TMainForm::SetOnButtonClick(TObject *Sender) {
         module->commandedState = state;
     }
     
-    // Send state command to module
-    uint8_t stateCmd = static_cast<uint8_t>(state);
-    canInterface->SendStateChange(selectedModuleId, stateCmd);
+    // Queue state command using message flags
+    messageFlags.stateChangeModuleId = selectedModuleId;
+    messageFlags.stateChangeNewState = static_cast<uint8_t>(state);
+    messageFlags.stateChange = true;
     
-    LogMessage("Commanding module " + IntToStr(selectedModuleId) + " to ON");
+    LogMessage("Queueing state change for module " + IntToStr(selectedModuleId) + " to ON");
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::SetAllStatesButtonClick(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+    if (!isConnected) {
+        ShowError("Not connected to CAN bus");
+        return;
+    }
     PackEmulator::ModuleState state = selectedState;  // Use the last selected state
     
     // Track the commanded state for all modules (but don't change actual state)
@@ -339,10 +373,15 @@ void __fastcall TMainForm::SetAllStatesButtonClick(TObject *Sender) {
         if (module != NULL) {
             module->commandedState = state;
         }
-        canInterface->SendStateChange(id, stateCmd);
     }
     
-    LogMessage("Commanding all modules to state " + IntToStr(stateCmd));
+    // Use broadcast (module ID 0) to send to all modules at once
+    // This is more efficient than queuing individual commands
+    messageFlags.stateChangeModuleId = 0;  // 0 = broadcast to all
+    messageFlags.stateChangeNewState = stateCmd;
+    messageFlags.stateChange = true;
+    
+    LogMessage("Queueing broadcast state change to all modules to state " + IntToStr(stateCmd));
     // Don't update display yet - wait for module responses
     // UpdateModuleList();
 }
@@ -402,78 +441,23 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
         UpdateModuleList();
     }
     
-    // Broadcast highest allowed state to all registered modules
+    // Set flags for heartbeat and time sync
     static int heartbeatCounter = 0;
-    static bool wasBroadcasting = false;
-    heartbeatCounter++;
+    static int timeSyncCounter = 0;
     
-    if (heartbeatCounter >= 2) {  // Every 200ms (100ms timer * 2)
+    heartbeatCounter++;
+    timeSyncCounter++;
+    
+    // Set heartbeat flag every 500ms (100ms timer * 5)
+    if (heartbeatCounter >= 5) {
         heartbeatCounter = 0;
-        
-        std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
-        if (!moduleIds.empty()) {
-            // We have registered modules - send broadcast heartbeat
-            if (!wasBroadcasting) {
-                LogMessage("Started broadcasting max state to " + IntToStr((int)moduleIds.size()) + " module(s)");
-                wasBroadcasting = true;
-            }
-            
-            // Send maximum allowed state broadcast (0x517)
-            // This tells all modules the highest state they're allowed to enter
-            uint8_t maxState = static_cast<uint8_t>(selectedState);  // Use the last selected state
-            uint8_t data[8] = {0};
-            data[0] = maxState;  // Maximum allowed state
-            
-            // Update heartbeat indicator
-            HeartbeatLabel->Caption = "Heartbeat: " + IntToStr(maxState);
-            HeartbeatLabel->Font->Color = clGreen;
-            
-            // Broadcast to all modules (use 0xFF as broadcast ID)
-            // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
-            // The 29-bit extended ID = (SID << 18) | EID
-            uint32_t heartbeatExtId = ((uint32_t)ID_MODULE_MAX_STATE << 18) | 0;  // 0x517 -> 0x145C0000
-            if (canInterface->SendMessage(heartbeatExtId, data, 1, true)) {
-                static int logCounter = 0;
-                logCounter++;
-                if (logCounter >= 25) {  // Log every 5 seconds (200ms * 25)
-                    LogMessage("→ 0x" + IntToHex((int)ID_MODULE_MAX_STATE, 3) + 
-                              " [Heartbeat/MaxState] State=" + IntToStr(maxState) + 
-                              " (0x" + IntToHex(data[0], 2) + ") to " + 
-                              IntToStr((int)moduleIds.size()) + " module(s)");
-                    logCounter = 0;
-                }
-            } else {
-                LogMessage("✗ Failed to send heartbeat 0x517!");
-            }
-            
-            // Also send keep-alive/time sync
-            uint32_t timestamp = GetTickCount() / 1000;  // Seconds since boot
-            data[0] = 0xFF;  // Broadcast marker
-            data[1] = (timestamp >> 24) & 0xFF;
-            data[2] = (timestamp >> 16) & 0xFF;
-            data[3] = (timestamp >> 8) & 0xFF;
-            data[4] = timestamp & 0xFF;
-            // IMPORTANT: For extended frames, the 11-bit message ID goes in bits 28-18
-            uint32_t timeSyncExtId = ((uint32_t)ID_MODULE_SET_TIME << 18) | 0;  // 0x516 -> 0x14580000
-            if (canInterface->SendMessage(timeSyncExtId, data, 5, true)) {
-                static int timeLogCounter = 0;
-                timeLogCounter++;
-                if (timeLogCounter >= 50) {  // Log every 10 seconds
-                    LogMessage("→ 0x" + IntToHex((int)ID_MODULE_SET_TIME, 3) + 
-                              " [Time Sync] Timestamp=" + IntToStr((int)timestamp) + "s");
-                    timeLogCounter = 0;
-                }
-            }
-        } else {
-            // No registered modules - stop broadcasting
-            if (wasBroadcasting) {
-                LogMessage("Stopped broadcasting (no registered modules)");
-                wasBroadcasting = false;
-                // Update heartbeat indicator
-                HeartbeatLabel->Caption = "Heartbeat: -";
-                HeartbeatLabel->Font->Color = clGray;
-            }
-        }
+        messageFlags.heartbeat = true;
+    }
+    
+    // Set time sync flag every 5 seconds (100ms timer * 50)
+    if (timeSyncCounter >= 50) {
+        timeSyncCounter = 0;
+        messageFlags.timeSync = true;
     }
 }
 
@@ -756,9 +740,9 @@ void TMainForm::UpdateStatusDisplay() {
     // Show current with direction indicator
     String currentStr = "Current: ";
     if (packCurrent > 0.1f) {
-        currentStr += "→ " + FloatToStrF(packCurrent, ffFixed, 7, 1) + "A";  // Discharge
+        currentStr += "-> " + FloatToStrF(packCurrent, ffFixed, 7, 1) + "A";  // Discharge
     } else if (packCurrent < -0.1f) {
-        currentStr += "← " + FloatToStrF(-packCurrent, ffFixed, 7, 1) + "A";  // Charge
+        currentStr += "<- " + FloatToStrF(-packCurrent, ffFixed, 7, 1) + "A";  // Charge
     } else {
         currentStr += FloatToStrF(packCurrent, ffFixed, 7, 1) + "A";
     }
@@ -917,10 +901,10 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     
     // Log with module ID for extended frames
     if (msg.isExtended && moduleIdFromExtended > 0) {
-        LogMessage("← 0x" + IntToHex((int)canId, 3) + " (M" + IntToStr(moduleIdFromExtended) + ")" + 
+        LogMessage("<- 0x" + IntToHex((int)canId, 3) + " (M" + IntToStr(moduleIdFromExtended) + ")" + 
                    description + " [" + IntToStr(msg.length) + "] " + dataStr);
     } else {
-        LogMessage("← 0x" + IntToHex((int)canId, 3) + description + " [" + 
+        LogMessage("<- 0x" + IntToHex((int)canId, 3) + description + " [" + 
                    IntToStr(msg.length) + "] " + dataStr);
     }
     
@@ -993,7 +977,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
                 // For registration, we include the module ID in the lower bits
                 uint32_t regExtId = ((uint32_t)ID_MODULE_REGISTRATION << 18) | moduleId;  // 0x510 -> 0x14400000 + moduleId
                 if (canInterface->SendMessage(regExtId, regData, 8, true)) {
-                        LogMessage("→ 0x" + IntToHex((int)ID_MODULE_REGISTRATION, 3) + 
+                        LogMessage("-> 0x" + IntToHex((int)ID_MODULE_REGISTRATION, 3) + 
                                   " [Registration ACK] Assigned ID " + IntToStr(moduleId));
                     }
                     LogMessage("✓ Registered module ID " + IntToStr(moduleId) + 
@@ -1037,7 +1021,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     else if (canId == ID_MODULE_STATUS_1) {
         // Use the module ID we already extracted from extended frame
         uint8_t moduleId = moduleIdFromExtended;
-        LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_1 from module " + IntToStr(moduleId));
+        LogMessage("<- 0x" + IntToHex((int)canId, 3) + " STATUS_1 from module " + IntToStr(moduleId));
         
         // Clear the pending flag since we got a response
         moduleManager->SetStatusPending(moduleId, false);
@@ -1049,7 +1033,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         // Log only occasionally to avoid spam
         static int status2Count = 0;
         if (++status2Count % 10 == 0) {
-            LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_2 from module " + IntToStr(moduleId));
+            LogMessage("<- 0x" + IntToHex((int)canId, 3) + " STATUS_2 from module " + IntToStr(moduleId));
         }
         ProcessModuleStatus2(moduleId, msg.data);
     }
@@ -1059,14 +1043,14 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         // Log only occasionally to avoid spam
         static int status3Count = 0;
         if (++status3Count % 10 == 0) {
-            LogMessage("← 0x" + IntToHex((int)canId, 3) + " STATUS_3 from module " + IntToStr(moduleId));
+            LogMessage("<- 0x" + IntToHex((int)canId, 3) + " STATUS_3 from module " + IntToStr(moduleId));
         }
         ProcessModuleStatus3(moduleId, msg.data);
     }
     else if (canId == ID_MODULE_HARDWARE) {
         // Hardware capability message from module
         uint8_t moduleId = moduleIdFromExtended;
-        LogMessage("← 0x" + IntToHex((int)canId, 3) + " HARDWARE from module " + IntToStr(moduleId));
+        LogMessage("<- 0x" + IntToHex((int)canId, 3) + " HARDWARE from module " + IntToStr(moduleId));
         ProcessModuleHardware(moduleId, msg.data);
     }
     // Check for cell voltage data (from VCU interface, repurpose for modules)
@@ -1083,7 +1067,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     else if (canId == ID_MODULE_DETAIL) {
         // Module ID comes from extended CAN ID, not from data
         uint8_t cellId = msg.data[0];
-        LogMessage("← 0x505 MODULE_DETAIL from module " + IntToStr(moduleIdFromExtended) + 
+        LogMessage("<- 0x505 MODULE_DETAIL from module " + IntToStr(moduleIdFromExtended) + 
                   " for cell " + IntToStr(cellId));
         ProcessModuleDetail(moduleIdFromExtended, msg.data);
     }
@@ -1109,6 +1093,12 @@ void TMainForm::OnCANError(uint32_t errorCode, const std::string& errorMsg) {
 void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
     // First update the module status (updates message count and timestamp)
     moduleManager->UpdateModuleStatus(moduleId, data);
+    
+    // Clear the waiting flag - we got a response
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        module->waitingForStatusResponse = false;
+    }
     
     // Parse MODULE_STATUS_1 according to can_frm_mod.h:
     // Byte 0: ModuleState (bits 0-3) and ModuleStatus (bits 4-7)
@@ -1144,7 +1134,7 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
                " Cells=" + IntToStr(cellCount));
     
     // Update module with parsed data
-    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    // Reuse the module pointer we already have
     if (module != NULL) {
         // Update state
         switch(moduleState) {
@@ -1222,6 +1212,9 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
+        // Clear the waiting flag - we got a response
+        module->waitingForCellResponse = false;
+        
         uint8_t cellId = data[0];
         uint8_t expectedCount = data[1];
         
@@ -1278,13 +1271,19 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
 }
 
 void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
+    // Clear the waiting flag - we got a response
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        module->waitingForStatusResponse = false;
+    }
+    
     // Parse MODULE_STATUS_2 according to can_frm_mod.h:
     // Bytes 0-1: cellLoVolt (16 bits, 0.001V per bit)
     // Bytes 2-3: cellHiVolt (16 bits, 0.001V per bit)
     // Bytes 4-5: cellAvgVolt (16 bits, 0.001V per bit)
     // Bytes 6-7: cellTotalV (16 bits, 0.015V per bit per eeprom_data.h)
     
-    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    // Reuse the module pointer we already have
     if (module != NULL) {
         // LITTLE ENDIAN byte order
         uint16_t loVolt = data[0] | (data[1] << 8);
@@ -1310,6 +1309,12 @@ void TMainForm::ProcessModuleStatus2(uint8_t moduleId, const uint8_t* data) {
 }
 
 void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
+    // Clear the waiting flag - we got a response
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL) {
+        module->waitingForStatusResponse = false;
+    }
+    
     // Parse MODULE_STATUS_3 according to can_frm_mod.h:
     // Bytes 0-1: cellLoTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit, -55.35°C offset)
     // Bytes 2-3: cellHiTemp (16 bits, TEMPERATURE_FACTOR = 0.01°C per bit, -55.35°C offset)
@@ -1317,7 +1322,7 @@ void TMainForm::ProcessModuleStatus3(uint8_t moduleId, const uint8_t* data) {
     // Bytes 6-7: UNUSED
     // Note: Temperature encoding: actual_celsius = (raw * 0.01) - 55.35
     
-    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    // Reuse the module pointer we already have
     if (module != NULL) {
         // LITTLE ENDIAN byte order
         uint16_t loTemp = data[0] | (data[1] << 8);
@@ -1455,20 +1460,9 @@ void __fastcall TMainForm::DetailsPageControlChange(TObject *Sender) {
 void __fastcall TMainForm::CellPollTimerTimer(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
     
-    static int timerCallCount = 0;
-    if (timerCallCount++ < 5) {
-        LogMessage("CellPollTimer called. Polling: " + String(pollingCellDetails ? "Yes" : "No") +
-                  ", Connected: " + String(isConnected ? "Yes" : "No") +
-                  ", Module: " + IntToStr(selectedModuleId));
-    }
-    
     // Check if we should be polling
     if (!pollingCellDetails || !isConnected || selectedModuleId == 0) {
-        if (timerCallCount <= 5) {
-            LogMessage("Stopping timer - conditions not met");
-        }
         CellPollTimer->Enabled = false;
-        timerCallCount = 0;  // Reset counter
         return;
     }
     
@@ -1487,38 +1481,15 @@ void __fastcall TMainForm::CellPollTimerTimer(TObject *Sender) {
         return;  // No cells to poll
     }
     
-    // Log cell count once
-    static bool loggedCellCount = false;
-    if (!loggedCellCount) {
-        LogMessage("Polling " + IntToStr(cellCount) + " cells for module " + IntToStr(selectedModuleId));
-        loggedCellCount = true;
-    }
-    
-    // Send detail request for next cell
-    bool success = canInterface->SendDetailRequest(selectedModuleId, nextCellToRequest);
-    
-    // Log the request (log all cells for first round, then stop)
-    static int completedRounds = 0;
-    if (completedRounds < 1) {
-        LogMessage("→ Sent DETAIL_REQUEST to module " + IntToStr(selectedModuleId) + 
-                  " for cell " + IntToStr(nextCellToRequest) + 
-                  (success ? " (success)" : " (failed)"));
-        
-        // Also log any error from CAN interface
-        std::string canError = canInterface->GetLastError();
-        if (!canError.empty() && canError.find("SendDetailRequest") != std::string::npos) {
-            LogMessage("  CAN Frame: " + String(canError.c_str()));
-        }
-    }
+    // Set cell detail request flag with module and cell IDs
+    messageFlags.cellDetail = true;
+    messageFlags.cellModuleId = selectedModuleId;
+    messageFlags.cellId = nextCellToRequest;
     
     // Move to next cell for next poll
     nextCellToRequest++;
     if (nextCellToRequest >= cellCount) {
         nextCellToRequest = 0;  // Wrap around to first cell
-        completedRounds++;  // Increment after full round
-        if (completedRounds == 1) {
-            LogMessage("Completed first round of cell polling, stopping log spam");
-        }
     }
     
     lastCellRequestTime = GetTickCount();
@@ -1576,8 +1547,8 @@ void TMainForm::SendModuleStatusRequest(uint8_t moduleId) {
 void __fastcall TMainForm::DiscoveryTimerTimer(TObject *Sender) {
     (void)Sender;
     
-    // Send discovery request every 5 seconds (actually using 10 seconds like Pack Controller)
-    SendModuleDiscoveryRequest();
+    // Set discovery flag every 5 seconds
+    messageFlags.discovery = true;
 }
 
 //---------------------------------------------------------------------------
@@ -1595,20 +1566,302 @@ void __fastcall TMainForm::PollTimerTimer(TObject *Sender) {
     std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
     if (moduleIds.empty()) return;
     
-    // Timer already runs at 100ms interval, no need to check again
-    DWORD currentTime = GetTickCount();
-    
     // Simple round-robin polling - poll one module per timer tick
     if (nextModuleToPoll >= moduleIds.size()) {
         nextModuleToPoll = 0;
     }
     
-    uint8_t moduleId = moduleIds[nextModuleToPoll];
-    SendModuleStatusRequest(moduleId);
+    // Set status request flag with module ID
+    messageFlags.statusRequest = true;
+    messageFlags.statusModuleId = moduleIds[nextModuleToPoll];
     
     // Move to next module for next poll
     nextModuleToPoll++;
-    lastPollTime = currentTime;
+}
+
+//---------------------------------------------------------------------------
+// Message Queue Processing Functions
+//---------------------------------------------------------------------------
+
+void __fastcall TMainForm::MessagePollTimerTimer(TObject *Sender) {
+    (void)Sender;
+    
+    // Process all pending messages in priority order
+    ProcessMessageQueue();
+}
+
+void TMainForm::ProcessMessageQueue() {
+    if (!isConnected) {
+        return;
+    }
+    
+    // Process messages in priority order
+    // Priority 1: State changes (SAFETY-CRITICAL - highest priority)
+    if (messageFlags.stateChange) {
+        LogMessage("Processing queued state change message");
+        messageFlags.stateChange = false;
+        SendStateChangeMessage();
+        return; // Process one message per call for better timing
+    }
+    
+    // Priority 2: Heartbeat (important for connection)
+    if (messageFlags.heartbeat) {
+        messageFlags.heartbeat = false;
+        SendHeartbeatMessage();
+        return;
+    }
+    
+    // Priority 3: Cell Detail requests
+    if (messageFlags.cellDetail) {
+        messageFlags.cellDetail = false;
+        SendCellDetailRequest();
+        return;
+    }
+    
+    // Priority 4: Status requests
+    if (messageFlags.statusRequest) {
+        messageFlags.statusRequest = false;
+        SendStatusRequest();
+        return;
+    }
+    
+    // Priority 5: Registration ACKs
+    if (messageFlags.registration) {
+        messageFlags.registration = false;
+        SendRegistrationAck();
+        return;
+    }
+    
+    // Priority 6: Time sync
+    if (messageFlags.timeSync) {
+        messageFlags.timeSync = false;
+        SendTimeSync();
+        return;
+    }
+    
+    // Priority 7: Discovery (lowest priority)
+    if (messageFlags.discovery) {
+        messageFlags.discovery = false;
+        SendDiscoveryRequest();
+        return;
+    }
+}
+
+void TMainForm::SendHeartbeatMessage() {
+    // Calculate the maximum state allowed based on all modules' commanded states
+    uint8_t maxState = 0;  // Start with OFF
+    
+    std::vector<uint8_t> moduleIds = moduleManager->GetRegisteredModuleIds();
+    for (size_t i = 0; i < moduleIds.size(); i++) {
+        PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleIds[i]);
+        if (module != NULL) {
+            uint8_t cmdState = static_cast<uint8_t>(module->commandedState);
+            if (cmdState > maxState) {
+                maxState = cmdState;
+            }
+        }
+    }
+    
+    // If no modules or all OFF, still allow at least STANDBY
+    if (maxState == 0 && moduleIds.size() > 0) {
+        maxState = 1;  // STANDBY
+    }
+    
+    // Send MODULE_MAX_STATE (0x517) - Heartbeat with highest allowed state
+    uint8_t data[1] = {0};
+    data[0] = maxState;
+    
+    uint32_t heartbeatExtId = ((uint32_t)ID_MODULE_MAX_STATE << 18) | 0;
+    if (canInterface->SendMessage(heartbeatExtId, data, 1, true)) {
+        // Update heartbeat indicator
+        String stateName;
+        switch(maxState) {
+            case 0: stateName = "OFF"; break;
+            case 1: stateName = "STANDBY"; break;
+            case 2: stateName = "PRECHARGE"; break;
+            case 3: stateName = "ON"; break;
+            default: stateName = "?"; break;
+        }
+        HeartbeatLabel->Caption = "Heartbeat: " + stateName;
+        HeartbeatLabel->Font->Color = clGreen;
+        
+        static int logCounter = 0;
+        if (++logCounter % 10 == 0) {  // Log every 10th heartbeat
+            LogMessage("-> 0x" + IntToHex((int)ID_MODULE_MAX_STATE, 3) + 
+                      " [Heartbeat] Max state: " + stateName);
+        }
+    }
+}
+
+void TMainForm::SendStateChangeMessage() {
+    uint8_t moduleId = messageFlags.stateChangeModuleId;
+    uint8_t newState = messageFlags.stateChangeNewState;
+    
+    String stateName;
+    switch(newState) {
+        case 0: stateName = "OFF"; break;
+        case 1: stateName = "STANDBY"; break;
+        case 2: stateName = "PRECHARGE"; break;
+        case 3: stateName = "ON"; break;
+        default: stateName = "UNKNOWN"; break;
+    }
+    
+    LogMessage("Sending state change: Module " + IntToStr(moduleId) + " to " + stateName);
+    
+    // Send the state change command
+    if (canInterface->SendStateChange(moduleId, newState)) {
+        LogMessage("-> 0x514 [State Change] Module " + IntToStr(moduleId) + 
+                  " to " + stateName + " - SUCCESS");
+    } else {
+        LogMessage("ERROR: Failed to send state change to Module " + IntToStr(moduleId));
+    }
+}
+
+void TMainForm::SendCellDetailRequest() {
+    uint8_t moduleId = messageFlags.cellModuleId;
+    uint8_t cellId = messageFlags.cellId;
+    
+    // Check if module is still waiting for a previous cell response
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL && module->waitingForCellResponse) {
+        // Check for timeout (200ms - shorter for cell details)
+        DWORD currentTime = GetTickCount();
+        if (currentTime - module->cellRequestTime < 200) {
+            // Still waiting, don't send another request yet
+            return;  // Keep the flag set to retry later
+        }
+        // Timeout occurred, will send new request
+        static int cellTimeoutCounter = 0;
+        if (++cellTimeoutCounter % 20 == 0) {
+            LogMessage("Module " + IntToStr(moduleId) + " cell " + IntToStr(cellId) + 
+                      " response timeout, retrying");
+        }
+    }
+    
+    // Send the detail request
+    bool success = canInterface->SendDetailRequest(moduleId, cellId);
+    
+    if (success) {
+        // Set waiting flag and timestamp
+        if (module != NULL) {
+            module->waitingForCellResponse = true;
+            module->cellRequestTime = GetTickCount();
+        }
+        
+        static int cellLogCounter = 0;
+        if (cellLogCounter++ < 50) {  // Log first 50 requests
+            LogMessage("→ 0x515 [Cell Detail Request] Module " + 
+                      IntToStr(moduleId) + " Cell " + IntToStr(cellId) + " (sent)");
+        }
+    } else {
+        static int errorLogCounter = 0;
+        if (errorLogCounter++ < 10) {
+            LogMessage("Failed to send cell detail request to Module " + 
+                      IntToStr(moduleId) + " Cell " + IntToStr(cellId));
+        }
+    }
+}
+
+void TMainForm::SendStatusRequest() {
+    uint8_t moduleId = messageFlags.statusModuleId;
+    
+    // Check if module is still waiting for a previous status response
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    if (module != NULL && module->waitingForStatusResponse) {
+        // Check for timeout (500ms)
+        DWORD currentTime = GetTickCount();
+        if (currentTime - module->statusRequestTime < 500) {
+            // Still waiting, don't send another request yet
+            return;  // Keep the flag set to retry later
+        }
+        // Timeout occurred, will send new request
+        static int timeoutLogCounter = 0;
+        if (++timeoutLogCounter % 10 == 0) {
+            LogMessage("Module " + IntToStr(moduleId) + " status response timeout, retrying");
+        }
+    }
+    
+    // Send MODULE_STATUS_REQUEST (0x512) to specific module
+    uint8_t data[1] = {0};
+    data[0] = 0x01;  // Request all status messages
+    
+    uint32_t extendedId = ((uint32_t)ID_MODULE_STATUS_REQUEST << 18) | moduleId;
+    
+    if (canInterface->SendMessage(extendedId, data, 1, true)) {
+        // Set waiting flag and timestamp
+        if (module != NULL) {
+            module->waitingForStatusResponse = true;
+            module->statusRequestTime = GetTickCount();
+        }
+        
+        // Log occasionally to avoid spam
+        static int statusLogCounter = 0;
+        if (++statusLogCounter % 50 == 0) {
+            LogMessage("→ 0x512 [Status Request] to module " + IntToStr(moduleId));
+        }
+    }
+}
+
+void TMainForm::SendRegistrationAck() {
+    uint8_t moduleId = messageFlags.registrationModuleId;
+    uint32_t uniqueId = messageFlags.registrationUniqueId;
+    
+    // Send MODULE_REGISTRATION (0x510) ACK
+    uint8_t regData[8] = {0};
+    regData[0] = 0x01;  // ACK
+    regData[1] = moduleId;  // Assigned module ID
+    
+    // Copy unique ID (little endian)
+    regData[4] = (uint8_t)(uniqueId & 0xFF);
+    regData[5] = (uint8_t)((uniqueId >> 8) & 0xFF);
+    regData[6] = (uint8_t)((uniqueId >> 16) & 0xFF);
+    regData[7] = (uint8_t)((uniqueId >> 24) & 0xFF);
+    
+    uint32_t regExtId = ((uint32_t)ID_MODULE_REGISTRATION << 18) | moduleId;
+    if (canInterface->SendMessage(regExtId, regData, 8, true)) {
+        LogMessage("→ 0x510 [Registration ACK] Module " + IntToStr(moduleId) +
+                  " ID: 0x" + IntToHex((int)uniqueId, 8));
+    }
+}
+
+void TMainForm::SendTimeSync() {
+    // Send MODULE_SET_TIME (0x516)
+    uint8_t data[5] = {0};
+    
+    // Get current time
+    SYSTEMTIME st;
+    GetSystemTime(&st);
+    
+    // Pack time: YYMMDDHHSS (BCD format)
+    data[0] = ((st.wYear - 2000) / 10) << 4 | ((st.wYear - 2000) % 10);
+    data[1] = (st.wMonth / 10) << 4 | (st.wMonth % 10);
+    data[2] = (st.wDay / 10) << 4 | (st.wDay % 10);
+    data[3] = (st.wHour / 10) << 4 | (st.wHour % 10);
+    data[4] = (st.wMinute / 10) << 4 | (st.wMinute % 10);
+    
+    uint32_t timeSyncExtId = ((uint32_t)ID_MODULE_SET_TIME << 18) | 0;
+    if (canInterface->SendMessage(timeSyncExtId, data, 5, true)) {
+        static int timeLogCounter = 0;
+        if (++timeLogCounter % 10 == 0) {  // Log every 10th sync
+            LogMessage("→ 0x516 [Time Sync] " + 
+                      IntToStr(st.wYear) + "-" + 
+                      IntToStr(st.wMonth) + "-" + 
+                      IntToStr(st.wDay) + " " +
+                      IntToStr(st.wHour) + ":" + 
+                      IntToStr(st.wMinute));
+        }
+    }
+}
+
+void TMainForm::SendDiscoveryRequest() {
+    // Send MODULE_ANNOUNCE_REQUEST (0x51D)
+    uint8_t data[8] = {0};
+    data[0] = 0x01;  // Request announcement from all modules
+    
+    uint32_t announceExtId = ((uint32_t)ID_MODULE_ANNOUNCE_REQUEST << 18) | 0;
+    if (canInterface->SendMessage(announceExtId, data, 8, true)) {
+        LogMessage("→ 0x51D [Discovery Request] Broadcasting to all modules");
+    }
 }
 
 //---------------------------------------------------------------------------

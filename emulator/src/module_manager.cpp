@@ -71,6 +71,12 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.messageCount = 0;
     module.errorCount = 0;
     
+    // Initialize waiting flags
+    module.waitingForStatusResponse = false;
+    module.waitingForCellResponse = false;
+    module.statusRequestTime = 0;
+    module.cellRequestTime = 0;
+    
     // Initialize electrical data
     module.voltage = 0.0f;
     module.current = 0.0f;

@@ -158,7 +158,24 @@ bool CANInterface::SendModuleCommand(uint8_t moduleId, uint8_t command, const ui
 }
 
 bool CANInterface::SendStateChange(uint8_t moduleId, uint8_t newState) {
-    return SendModuleCommand(moduleId, 0x01, &newState, 1); // Command 0x01 = State change
+    // Send MODULE_STATE_CHANGE message (0x514) according to can_frm_mod.h:
+    // typedef struct {                  // 0x514 MODULE STATE CHANGE - 4 bytes
+    //   uint32_t moduleId      : 8;     // module ID  
+    //   uint32_t state         : 4;     // module state
+    //   uint32_t UNUSED_12_15  : 4;     // 4 bits unused
+    //   uint32_t hvBusVoltage  : 16;    // HV bus voltage
+    // }CANFRM_MODULE_STATE_CHANGE;
+    
+    uint8_t data[4] = {0};
+    data[0] = moduleId;              // Byte 0: Module ID (0 = broadcast)
+    data[1] = newState & 0x0F;       // Byte 1: State in lower 4 bits
+    data[2] = 0;                     // Byte 2: HV bus voltage low byte
+    data[3] = 0;                     // Byte 3: HV bus voltage high byte
+    
+    // Extended ID: message type in upper bits, no module ID in extended part
+    uint32_t extendedId = ((uint32_t)ID_MODULE_STATE_CHANGE << 18) | 0;
+    
+    return SendMessage(extendedId, data, 4, true);
 }
 
 bool CANInterface::SendBalancingCommand(uint8_t moduleId, uint8_t cellMask) {
