@@ -133,6 +133,7 @@ typedef struct {
   lastContact_t lastTransmit;
   bool        hardwarePending;
   bool        statusPending;
+  bool        waiting;           // General flag - waiting for any response
   faultCode   faultCode;
   uint8_t     consecutiveTimeouts;
   uint8_t     statusMessagesReceived;  // Bitmask: bit0=Status1, bit1=Status2, bit2=Status3

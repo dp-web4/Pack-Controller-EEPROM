@@ -370,12 +370,13 @@ void PCU_Tasks(void)
           module[index].nextState = moduleOff;
           module[index].faultCode.commsError = true;
         }
-      }else if(elapsedTicks > MCU_STATUS_INTERVAL && (module[index].statusPending == false)){
+      }else if(elapsedTicks > MCU_STATUS_INTERVAL && (module[index].statusPending == false) && 
+               (module[index].waiting == false)){  // Don't send if waiting for another response
         // Send State
         ShowDebugMessage(MSG_STATUS_REQUEST, module[index].moduleId, index);
         MCU_RequestModuleStatus(module[index].moduleId);
         // Have we received the hardware info? This should have been sent at registration
-        if(module[index].hardwarePending)
+        if(module[index].hardwarePending && (module[index].waiting == false))
           // Not received, so lets request it
           MCU_RequestHardware(module[index].moduleId);
       }else{
@@ -402,14 +403,16 @@ void PCU_Tasks(void)
             nextModuleToPoll = 0;
           }
           
-          // Only poll modules that are not in timeout/error state
+          // Only poll modules that are not in timeout/error state or waiting for response
           if(module[nextModuleToPoll].statusPending == false && 
-             module[nextModuleToPoll].faultCode.commsError == false){
+             module[nextModuleToPoll].faultCode.commsError == false &&
+             module[nextModuleToPoll].waiting == false){
             ShowDebugMessage(MSG_STATUS_REQUEST, module[nextModuleToPoll].moduleId, nextModuleToPoll);
             MCU_RequestModuleStatus(module[nextModuleToPoll].moduleId);
             
             // Have we received the hardware info?
-            if(module[nextModuleToPoll].hardwarePending){
+            if(module[nextModuleToPoll].hardwarePending && 
+               module[nextModuleToPoll].waiting == false){
               MCU_RequestHardware(module[nextModuleToPoll].moduleId);
             }
             
@@ -1029,6 +1032,7 @@ void MCU_RegisterModule(void){
     module[moduleIndex].consecutiveTimeouts = 0;  // Reset timeout counter on re-registration
     module[moduleIndex].statusMessagesReceived = 0;  // Reset status tracking
     module[moduleIndex].statusPending = false;  // Start with false to allow polling
+    module[moduleIndex].waiting = false;  // Initialize waiting flag
     module[moduleIndex].hardwarePending = true;  // Re-request hardware info
     
     // Update module counts
@@ -1056,6 +1060,7 @@ void MCU_RegisterModule(void){
       module[moduleIndex].lastContact.ticks = htim1.Instance->CNT;
       module[moduleIndex].lastContact.overflows = etTimerOverflows;
       module[moduleIndex].statusPending = false;  // Start with false to allow immediate polling
+      module[moduleIndex].waiting = false;  // Initialize waiting flag
       module[moduleIndex].consecutiveTimeouts = 0;  // Initialize timeout counter for new module
       module[moduleIndex].statusMessagesReceived = 0;  // Initialize status tracking
       
@@ -1436,8 +1441,9 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
     if((debugLevel & (DBG_MCU + DBG_ERRORS))== (DBG_MCU + DBG_ERRORS)){ sprintf(tempBuffer,"MCU ERROR - Unregistered module in MCU_RequestModuleStatus()"); serialOut(tempBuffer);}
   }else{
 
-    // set request flag
+    // set request flags
     module[moduleIndex].statusPending = true;
+    module[moduleIndex].waiting = true;  // Set general waiting flag
     module[moduleIndex].statusMessagesReceived = 0;  // Clear previous status bits
 
     // request cell detail packet for cell 0
@@ -1460,6 +1466,14 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
 
     // Use new debug message system for polling message
     ShowDebugMessage(ID_MODULE_STATUS_REQUEST, moduleId);
+    
+    // Debug: Explicitly show we're sending status request
+    if(debugLevel & DBG_MCU){ 
+      sprintf(tempBuffer,"MCU TX 0x514 Status Request to Module %02x (waiting=%d)", 
+              moduleId, module[moduleIndex].waiting); 
+      serialOut(tempBuffer);
+    }
+    
     MCU_TransmitMessageQueue(CAN2);                    // Send it
     
     // Reset timeout when we request status from a module
@@ -1527,9 +1541,10 @@ void MCU_ProcessModuleStatus1(void){
     // Track which status message was received
     module[moduleIndex].statusMessagesReceived |= (1 << 0);  // Status1 received
     
-    // Only clear statusPending when all 3 received
+    // Only clear statusPending and waiting when all 3 received
     if(module[moduleIndex].statusMessagesReceived == 0x07) {  // All 3 bits set
         module[moduleIndex].statusPending = false;
+        module[moduleIndex].waiting = false;  // Clear general waiting flag
         module[moduleIndex].statusMessagesReceived = 0;  // Reset for next time
     }
     
@@ -1627,9 +1642,10 @@ void MCU_ProcessModuleStatus2(void){
     // Track which status message was received
     module[moduleIndex].statusMessagesReceived |= (1 << 1);  // Status2 received
     
-    // Only clear statusPending when all 3 received
+    // Only clear statusPending and waiting when all 3 received
     if(module[moduleIndex].statusMessagesReceived == 0x07) {  // All 3 bits set
         module[moduleIndex].statusPending = false;
+        module[moduleIndex].waiting = false;  // Clear general waiting flag
         module[moduleIndex].statusMessagesReceived = 0;  // Reset for next time
     }
     
@@ -1697,9 +1713,10 @@ void MCU_ProcessModuleStatus3(void){
     // Track which status message was received
     module[moduleIndex].statusMessagesReceived |= (1 << 2);  // Status3 received
     
-    // Only clear statusPending when all 3 received
+    // Only clear statusPending and waiting when all 3 received
     if(module[moduleIndex].statusMessagesReceived == 0x07) {  // All 3 bits set
         module[moduleIndex].statusPending = false;
+        module[moduleIndex].waiting = false;  // Clear general waiting flag
         module[moduleIndex].statusMessagesReceived = 0;  // Reset for next time
     }
     
@@ -1801,6 +1818,22 @@ void MCU_ProcessCellCommStatus1(void){
 void MCU_RequestCellDetail(uint8_t moduleId){
 
   CANFRM_MODULE_DETAIL_REQUEST detailRequest;
+  uint8_t moduleIndex = MAX_MODULES_PER_PACK;
+  uint8_t index;
+  
+  // Find module index
+  for(index = 0; index < MAX_MODULES_PER_PACK; index++){
+    if(!module[index].isRegistered) continue;
+    if(moduleId == module[index].moduleId){
+      moduleIndex = index;
+      break;
+    }
+  }
+  
+  if(moduleIndex < MAX_MODULES_PER_PACK){
+    // Set waiting flag
+    module[moduleIndex].waiting = true;
+  }
 
   // request cell detail packet for cell 0
   detailRequest.moduleId = moduleId;
@@ -1822,6 +1855,12 @@ void MCU_RequestCellDetail(uint8_t moduleId){
   txObj.bF.ctrl.IDE = 1;                         // ID Extension selection - send base frame when cleared, extended frame when set
 
   ShowDebugMessage(MSG_CELL_DETAIL_REQ, moduleId);  // Simplified
+  
+  // Debug: Show initial cell request
+  if(debugLevel & DBG_MCU){ 
+    sprintf(tempBuffer,"MCU TX 0x515 Request initial cell: Module=%02x, Cell=00", moduleId); 
+    serialOut(tempBuffer);
+  }
 
   MCU_TransmitMessageQueue(CAN2);                    // Send it
 }
@@ -1931,6 +1970,13 @@ void MCU_ProcessCellDetail(void){
   // copy data to announcement structure
   memcpy(&cellDetail, rxd,sizeof(cellDetail));
   ShowDebugMessage(ID_MODULE_DETAIL, rxd[0] & 0x1F);  // Simplified - just log module ID
+  
+  // Debug: Show what cell we received and raw data
+  if(debugLevel & DBG_MCU){ 
+    sprintf(tempBuffer,"MCU RX 0x505 Cell detail: Module=%02x, Cell=%02x (of %d) [Raw bytes: %02X %02X %02X %02X]", 
+            rxObj.bF.id.EID, cellDetail.cellId, cellDetail.cellCount, rxd[0], rxd[1], rxd[2], rxd[3]); 
+    serialOut(tempBuffer);
+  }
 
   //check whether the module is already registered and perhaps lost its registration
   moduleIndex = MAX_MODULES_PER_PACK; //default the index to the next entry (we are using 0 so next index is the moduleCount)
@@ -1960,6 +2006,7 @@ void MCU_ProcessCellDetail(void){
   // request the next cell detail packet
   if (cellDetail.cellId < (cellDetail.cellCount -1)){
 
+    detailRequest.moduleId = rxObj.bF.id.EID;  // Must set module ID!
     detailRequest.cellId = cellDetail.cellId +1;
 
      // clear bit fields
@@ -1973,12 +2020,20 @@ void MCU_ProcessCellDetail(void){
     txObj.bF.id.EID = rxObj.bF.id.EID;             // Extended ID
 
     txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
-    txObj.bF.ctrl.DLC = CAN_DLC_2;                  // 2 bytes to transmit
+    txObj.bF.ctrl.DLC = CAN_DLC_3;                  // 3 bytes to transmit (ModuleCPU expects 3)
     txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
     txObj.bF.ctrl.IDE = 1;                          // ID Extension selection - send base frame when cleared, extended frame when set
 
-    if(debugLevel & DBG_MCU){ sprintf(tempBuffer,"MCU TX 0x515 Request detail: ID=%02x, CELL=%02x",rxObj.bF.id.EID,detailRequest.cellId ); serialOut(tempBuffer);}
+    if(debugLevel & DBG_MCU){ 
+      sprintf(tempBuffer,"MCU TX 0x515 Request next cell: Module=%02x, Cell=%02x", 
+              rxObj.bF.id.EID, detailRequest.cellId); 
+      serialOut(tempBuffer);
+    }
     MCU_TransmitMessageQueue(CAN2);                     // Send it
+  }
+  else {
+    // We've received all cells, clear the waiting flag
+    module[moduleIndex].waiting = false;
   }
 }
 
