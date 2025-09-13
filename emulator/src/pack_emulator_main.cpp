@@ -1486,11 +1486,8 @@ void __fastcall TMainForm::CellPollTimerTimer(TObject *Sender) {
     messageFlags.cellModuleId = selectedModuleId;
     messageFlags.cellId = nextCellToRequest;
     
-    // Move to next cell for next poll
-    nextCellToRequest++;
-    if (nextCellToRequest >= cellCount) {
-        nextCellToRequest = 0;  // Wrap around to first cell
-    }
+    // DON'T INCREMENT HERE - SendCellDetailRequest will do it after successful send
+    // This prevents skipping cells when requests are delayed
     
     lastCellRequestTime = GetTickCount();
 }
@@ -1725,15 +1722,13 @@ void TMainForm::SendCellDetailRequest() {
         // Check for timeout (200ms - shorter for cell details)
         DWORD currentTime = GetTickCount();
         if (currentTime - module->cellRequestTime < 200) {
-            // Still waiting, don't send another request yet
-            return;  // Keep the flag set to retry later
+            // Still waiting, re-queue the same cell for retry
+            messageFlags.cellDetail = true;  // Re-queue this request
+            return;  // Don't increment cell number
         }
-        // Timeout occurred, will send new request
-        static int cellTimeoutCounter = 0;
-        if (++cellTimeoutCounter % 20 == 0) {
-            LogMessage("Module " + IntToStr(moduleId) + " cell " + IntToStr(cellId) + 
-                      " response timeout, retrying");
-        }
+        // Timeout occurred, will send new request for same cell
+        LogMessage("Module " + IntToStr(moduleId) + " cell " + IntToStr(cellId) + 
+                  " response timeout (200ms), resending same cell");
     }
     
     // Send the detail request
@@ -1746,10 +1741,22 @@ void TMainForm::SendCellDetailRequest() {
             module->cellRequestTime = GetTickCount();
         }
         
-        static int cellLogCounter = 0;
-        if (cellLogCounter++ < 50) {  // Log first 50 requests
-            LogMessage("→ 0x515 [Cell Detail Request] Module " + 
-                      IntToStr(moduleId) + " Cell " + IntToStr(cellId) + " (sent)");
+        // Always log cell requests to verify sequencing
+        LogMessage("→ 0x515 [Cell Detail Request] Module " + 
+                  IntToStr(moduleId) + " Cell " + IntToStr(cellId) + " (sent)");
+        
+        // NOW increment to next cell since we successfully sent this one
+        if (module != NULL) {
+            uint8_t cellCount = module->cellCount;
+            if (cellCount == 0) {
+                cellCount = module->cellCountMax;
+            }
+            if (cellCount > 0) {
+                nextCellToRequest++;
+                if (nextCellToRequest >= cellCount) {
+                    nextCellToRequest = 0;  // Wrap around to first cell
+                }
+            }
         }
     } else {
         static int errorLogCounter = 0;
@@ -1757,6 +1764,8 @@ void TMainForm::SendCellDetailRequest() {
             LogMessage("Failed to send cell detail request to Module " + 
                       IntToStr(moduleId) + " Cell " + IntToStr(cellId));
         }
+        // Don't increment on failure - retry same cell next time
+        messageFlags.cellDetail = true;  // Re-queue this request
     }
 }
 
