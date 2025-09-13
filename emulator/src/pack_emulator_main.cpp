@@ -406,16 +406,8 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
             // Reset the static flag in CellPollTimerTimer
             LogMessage("Restarted cell polling for newly selected module " + IntToStr(selectedModuleId));
         }
-    } else if (!Selected && Item) {
-        // Handle deselection - extract module ID from "[ID]" format
-        String caption = Item->Caption;
-        caption = caption.SubString(2, caption.Length() - 2);  // Remove [ and ]
-        int moduleId = caption.ToInt();
-        if (selectedModuleId == moduleId) {
-            selectedModuleId = 0;
-            LogMessage("Module deselected");
-        }
     }
+    // Don't handle deselection - we want to keep at least one module selected
 }
 
 //---------------------------------------------------------------------------
@@ -633,6 +625,27 @@ void TMainForm::UpdateModuleList() {
     }
     
     ModuleListView->Items->EndUpdate();
+    
+    // Ensure exactly one module is selected
+    if (ModuleListView->Items->Count > 0) {
+        bool hasSelection = false;
+        for (int i = 0; i < ModuleListView->Items->Count; i++) {
+            if (ModuleListView->Items->Item[i]->Selected) {
+                hasSelection = true;
+                break;
+            }
+        }
+        
+        // If no selection, select the first module
+        if (!hasSelection) {
+            ModuleListView->Items->Item[0]->Selected = true;
+            // Extract module ID from "[ID]" format
+            String caption = ModuleListView->Items->Item[0]->Caption;
+            caption = caption.SubString(2, caption.Length() - 2);  // Remove [ and ]
+            selectedModuleId = caption.ToInt();
+            LogMessage("Auto-selected module " + IntToStr(selectedModuleId) + " (no previous selection)");
+        }
+    }
     
     // Restore the selection event handler
     ModuleListView->OnSelectItem = savedHandler;
@@ -961,6 +974,12 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
             if (!moduleManager->IsModuleRegistered(moduleId)) {
                 // New module - register it
                 if (moduleManager->RegisterModule(moduleId, uniqueId)) {
+                    // Auto-select first module discovered
+                    if (selectedModuleId == 0) {
+                        selectedModuleId = moduleId;
+                        LogMessage("Auto-selected first module: " + IntToStr(moduleId));
+                    }
+                    
                     // Send registration ACK with the assigned module ID
                     // According to CANFRM_MODULE_REGISTRATION (0x510):
                     uint8_t regData[8];

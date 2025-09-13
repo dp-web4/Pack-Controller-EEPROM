@@ -176,6 +176,8 @@ object MainForm: TMainForm
             MinWidth = 60
           end>
         GridLines = True
+        HideSelection = False
+        MultiSelect = False
         ReadOnly = True
         RowSelect = True
         TabOrder = 0
@@ -292,7 +294,7 @@ object MainForm: TMainForm
         OnClick = SetAllStatesButtonClick
       end
       object EnableBalancingCheck: TCheckBox
-        Left = 520
+        Left = 423
         Top = 28
         Width = 97
         Height = 17
@@ -300,11 +302,11 @@ object MainForm: TMainForm
         TabOrder = 3
       end
       object BalancingMaskEdit: TEdit
-        Left = 623
-        Top = 34
+        Left = 526
+        Top = 26
         Width = 66
         Height = 21
-        TabOrder = 4
+        TabOrder = 5
         Text = '0x00'
       end
     end
