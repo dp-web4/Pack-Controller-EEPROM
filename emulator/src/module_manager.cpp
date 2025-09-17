@@ -54,10 +54,49 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
         return false;
     }
     
+    // Check if this module ID already exists (possibly deregistered)
+    std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
+    if (it != modules.end()) {
+        // Module ID exists - check if it's deregistered
+        if (!it->second.isRegistered) {
+            // Reuse the existing slot but update with new registration info
+            it->second.uniqueId = uniqueId;
+            it->second.state = ModuleState::OFF;
+            it->second.commandedState = ModuleState::OFF;
+            it->second.isRegistered = true;
+            it->second.isResponding = true;
+            it->second.statusPending = false;
+            it->second.lastResponseTime = GetTickCount();
+            it->second.statusRequestTime = 0;
+            it->second.lastMessageTime = GetTickCount();
+            it->second.messageCount = 0;
+            it->second.errorCount = 0;
+            
+            // Reset waiting flags
+            it->second.waitingForStatusResponse = false;
+            it->second.waitingForCellResponse = false;
+            it->second.statusRequestTime = 0;
+            it->second.cellRequestTime = 0;
+            
+            // Don't clear electrical/cell data - keep last known values
+            // This allows UI to show historical data even after re-registration
+            
+            return true;
+        } else {
+            // Module is already registered - this shouldn't happen
+            // but update the unique ID in case it changed
+            it->second.uniqueId = uniqueId;
+            it->second.lastResponseTime = GetTickCount();
+            return true;
+        }
+    }
+    
+    // New module ID - check if we have room
     if (modules.size() >= (size_t)maxModules) {
         return false;
     }
     
+    // Create new module entry
     ModuleInfo module;
     module.moduleId = moduleId;
     module.uniqueId = uniqueId;
