@@ -1,5 +1,29 @@
 # Claude Context for Pack-Controller-EEPROM
 
+## Recent Updates (September 17, 2025)
+
+### Pack Emulator Improvements
+1. **Heartbeat Control**: Added Start/Stop heartbeat button with visual indicator
+   - Heartbeat rate reduced to 1 Hz (was 2 Hz)
+   - Discovery requests reduced to every 10 seconds (was 5 seconds)
+   - Indicator shows gray when disabled or no recent heartbeat
+
+2. **Module Slot Management Fix**: 
+   - Pre-initialize all 32 module slots with uniqueId = 0
+   - Check uniqueId == 0 to determine slot availability (not isRegistered)
+   - Deregistration keeps uniqueId intact to prevent slot reuse
+   - New modules won't take slots of deregistered modules
+   - GetAllModules only returns modules with non-zero unique IDs
+
+3. **UI Improvements**:
+   - Button panel width increased to 700px to accommodate new heartbeat button
+   - Heartbeat button functions like discovery Start/Stop
+   - Default heartbeat state is ON
+
+### Known Issues
+- Need to test changes before pushing (reminder to self!)
+- Module display properly preserves deregistered modules in list now
+
 ## Git Authentication
 **Universal Push Command**:
 ```bash
