@@ -994,24 +994,24 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         // Module doesn't send its assigned ID in announcement
         // We need to assign one based on unique ID
         uint8_t moduleId = 0;
-        
-        // Check if we already know this module
-        std::vector<uint8_t> existingIds = moduleManager->GetRegisteredModuleIds();
-        for (size_t i = 0; i < existingIds.size(); i++) {
-            PackEmulator::ModuleInfo* mod = moduleManager->GetModule(existingIds[i]);
+
+        // Step 1: Check ALL module slots (including deregistered) for matching unique ID
+        for (uint8_t id = 1; id <= 32; id++) {
+            PackEmulator::ModuleInfo* mod = moduleManager->GetModule(id);
             if (mod && mod->uniqueId == uniqueId) {
-                moduleId = existingIds[i];
+                moduleId = id;
+                LogMessage("Found existing slot " + IntToStr(id) + " for unique ID 0x" + IntToHex((int)uniqueId, 8));
                 break;
             }
         }
-        
-        // If not found, assign next available ID  
+
+        // Step 2: If not found, find first available slot (uniqueId == 0)
         if (moduleId == 0) {
-            // Find lowest available ID starting from 1 (check for uniqueId == 0)
             for (uint8_t id = 1; id <= 32; id++) {
                 PackEmulator::ModuleInfo* mod = moduleManager->GetModule(id);
                 if (mod && mod->uniqueId == 0) {
                     moduleId = id;
+                    LogMessage("Assigning new slot " + IntToStr(id) + " for unique ID 0x" + IntToHex((int)uniqueId, 8));
                     break;
                 }
             }
