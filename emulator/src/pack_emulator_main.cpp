@@ -54,6 +54,8 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     
     // Initialize UI
     UpdateConnectionStatus(false);
+    heartbeatEnabled = true;  // Default heartbeat to ON
+    lastHeartbeatTime = 0;
     
     // Load configuration
     LoadConfiguration();
@@ -124,6 +126,7 @@ void __fastcall TMainForm::ConnectButtonClick(TObject *Sender) {
         // Enable controls
         DiscoverButton->Enabled = true;
         RegisterButton->Enabled = true;
+        HeartbeatButton->Enabled = true;
         ConnectButton->Enabled = false;
         DisconnectButton->Enabled = true;
         
@@ -160,6 +163,7 @@ void __fastcall TMainForm::DisconnectButtonClick(TObject *Sender) {
     // Disable controls
     DiscoverButton->Enabled = false;
     RegisterButton->Enabled = false;
+    HeartbeatButton->Enabled = false;
     ConnectButton->Enabled = true;
     DisconnectButton->Enabled = false;
 }
@@ -194,6 +198,25 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
         LogMessage("Module discovery stopped");
         DiscoverButton->Caption = "Start Discovery";
         DiscoverButton->Tag = 0;
+    }
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::HeartbeatButtonClick(TObject *Sender) {
+    (void)Sender;  // Suppress unused parameter warning
+    
+    if (HeartbeatButton->Tag == 0) {
+        // Currently stopped, start heartbeat
+        HeartbeatButton->Caption = "Stop Heartbeat";
+        HeartbeatButton->Tag = 1;
+        heartbeatEnabled = true;
+        LogMessage("Heartbeat messages enabled");
+    } else {
+        // Currently running, stop heartbeat
+        HeartbeatButton->Caption = "Start Heartbeat";
+        HeartbeatButton->Tag = 0;
+        heartbeatEnabled = false;
+        LogMessage("Heartbeat messages disabled");
     }
 }
 
@@ -453,10 +476,21 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
     heartbeatCounter++;
     timeSyncCounter++;
     
-    // Set heartbeat flag every 500ms (100ms timer * 5)
-    if (heartbeatCounter >= 5) {
+    // Set heartbeat flag every 1 second (100ms timer * 10) if heartbeat is enabled
+    if (heartbeatCounter >= 10) {
         heartbeatCounter = 0;
-        messageFlags.heartbeat = true;
+        if (heartbeatEnabled) {
+            messageFlags.heartbeat = true;
+        }
+    }
+    
+    // Update heartbeat indicator - fade to gray if no heartbeat for 2 seconds or if disabled
+    DWORD currentTime = GetTickCount();
+    if (!heartbeatEnabled || (currentTime - lastHeartbeatTime > 2000)) {
+        HeartbeatLabel->Font->Color = clGray;
+        if (!heartbeatEnabled) {
+            HeartbeatLabel->Caption = "Heartbeat: Disabled";
+        }
     }
     
     // Set time sync flag every 5 seconds (100ms timer * 50)
@@ -1711,6 +1745,9 @@ void TMainForm::SendHeartbeatMessage() {
         }
         HeartbeatLabel->Caption = "Heartbeat: " + stateName;
         HeartbeatLabel->Font->Color = clGreen;
+        
+        // Update last heartbeat time for indicator management
+        lastHeartbeatTime = GetTickCount();
         
         static int logCounter = 0;
         if (++logCounter % 10 == 0) {  // Log every 10th heartbeat

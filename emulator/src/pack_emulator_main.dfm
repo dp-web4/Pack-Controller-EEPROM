@@ -26,7 +26,7 @@ object MainForm: TMainForm
     object ConnectionGroup: TGroupBox
       Left = 8
       Top = 4
-      Width = 600
+      Width = 700
       Height = 37
       Caption = ' CAN Connection '
       TabOrder = 0
@@ -56,6 +56,17 @@ object MainForm: TMainForm
         Font.Name = 'Tahoma'
         Font.Style = []
         ParentFont = False
+      end
+      object HeartbeatButton: TButton
+        Left = 595
+        Top = 11
+        Width = 100
+        Height = 22
+        Caption = 'Stop Heartbeat'
+        Enabled = False
+        TabOrder = 5
+        Tag = 1
+        OnClick = HeartbeatButtonClick
       end
       object CANChannelCombo: TComboBox
         Left = 16
@@ -572,7 +583,7 @@ object MainForm: TMainForm
   end
   object DiscoveryTimer: TTimer
     Enabled = False
-    Interval = 5000
+    Interval = 10000
     OnTimer = DiscoveryTimerTimer
     Left = 920
     Top = 200

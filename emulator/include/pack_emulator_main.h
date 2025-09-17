@@ -50,6 +50,7 @@ __published:	// IDE-managed Components
     TButton *RegisterButton;
     TButton *DeregisterButton;
     TButton *DeregisterAllButton;
+    TButton *HeartbeatButton;
     
     // Module control
     TGroupBox *ControlGroup;
@@ -132,6 +133,7 @@ __published:	// IDE-managed Components
     void __fastcall RegisterButtonClick(TObject *Sender);
     void __fastcall DeregisterButtonClick(TObject *Sender);
     void __fastcall DeregisterAllButtonClick(TObject *Sender);
+    void __fastcall HeartbeatButtonClick(TObject *Sender);
     void __fastcall SetOffButtonClick(TObject *Sender);
     void __fastcall SetStandbyButtonClick(TObject *Sender);
     void __fastcall SetPrechargeButtonClick(TObject *Sender);
@@ -158,6 +160,8 @@ private:	// User declarations
     PackEmulator::CANInterface* canInterface;
     
     bool isConnected;
+    bool heartbeatEnabled;  // Track whether heartbeat is enabled
+    DWORD lastHeartbeatTime;  // Track when last heartbeat was sent
     uint8_t selectedModuleId;
     uint8_t nextModuleToPoll;
     DWORD lastPollTime;
