@@ -171,8 +171,7 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
 bool ModuleManager::DeregisterModule(uint8_t moduleId) {
     std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
-        // Clear unique ID to mark slot as available
-        it->second.uniqueId = 0;
+        // Keep unique ID to prevent slot reuse
         it->second.isRegistered = false;
         it->second.isResponding = false;
         it->second.state = ModuleState::OFF;
@@ -182,9 +181,8 @@ bool ModuleManager::DeregisterModule(uint8_t moduleId) {
 }
 
 void ModuleManager::DeregisterAllModules() {
-    // Clear unique IDs to mark all slots as available
+    // Keep unique IDs but mark all as not registered
     for (std::map<uint8_t, ModuleInfo>::iterator it = modules.begin(); it != modules.end(); ++it) {
-        it->second.uniqueId = 0;
         it->second.isRegistered = false;
         it->second.isResponding = false;
         it->second.state = ModuleState::OFF;
