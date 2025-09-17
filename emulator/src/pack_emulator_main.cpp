@@ -171,6 +171,7 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
     if (DiscoverButton->Tag == 0) {
         // Start discovery
         moduleManager->StartDiscovery();
+        DiscoveryTimer->Enabled = true;  // Enable the discovery timer
         LogMessage("Module discovery started");
         
         // Send announcement request to trigger all modules to announce
@@ -189,6 +190,7 @@ void __fastcall TMainForm::DiscoverButtonClick(TObject *Sender) {
     } else {
         // Stop discovery
         moduleManager->StopDiscovery();
+        DiscoveryTimer->Enabled = false;  // Stop the discovery timer
         LogMessage("Module discovery stopped");
         DiscoverButton->Caption = "Start Discovery";
         DiscoverButton->Tag = 0;
@@ -391,6 +393,14 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
     TListItem *Item, bool Selected) {
     (void)Sender;  // Suppress unused parameter warning
     if (Selected && Item) {
+        // Check if the module is registered (status column is SubItems[1])
+        if (Item->SubItems->Count > 1 && Item->SubItems->Strings[1] == "---") {
+            // Module is deregistered, prevent selection
+            Item->Selected = false;
+            LogMessage("Cannot select deregistered module");
+            return;
+        }
+        
         // Extract module ID from "[ID]" format
         String caption = Item->Caption;
         caption = caption.SubString(2, caption.Length() - 2);  // Remove [ and ]
@@ -416,6 +426,9 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
     if (!isConnected) {
         return;
     }
+    
+    // Check for module timeouts (5 second timeout)
+    moduleManager->CheckTimeouts(GetTickCount(), 5000);
     
     // Update display
     UpdateStatusDisplay();
@@ -1793,6 +1806,7 @@ void TMainForm::SendStatusRequest() {
     
     // Check if module is still waiting for a previous status response
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
+    bool isRetry = false;
     if (module != NULL && module->waitingForStatusResponse) {
         // Check for timeout (500ms)
         DWORD currentTime = GetTickCount();
@@ -1801,6 +1815,7 @@ void TMainForm::SendStatusRequest() {
             return;  // Keep the flag set to retry later
         }
         // Timeout occurred, will send new request
+        isRetry = true;
         static int timeoutLogCounter = 0;
         if (++timeoutLogCounter % 10 == 0) {
             LogMessage("Module " + IntToStr(moduleId) + " status response timeout, retrying");
@@ -1814,10 +1829,12 @@ void TMainForm::SendStatusRequest() {
     uint32_t extendedId = ((uint32_t)ID_MODULE_STATUS_REQUEST << 18) | moduleId;
     
     if (canInterface->SendMessage(extendedId, data, 1, true)) {
-        // Set waiting flag and timestamp
+        // Set waiting flag and timestamp (only update timestamp on first request, not retries)
         if (module != NULL) {
             module->waitingForStatusResponse = true;
-            module->statusRequestTime = GetTickCount();
+            if (!isRetry) {
+                module->statusRequestTime = GetTickCount();
+            }
         }
         
         // Log occasionally to avoid spam

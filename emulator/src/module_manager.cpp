@@ -66,6 +66,8 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     module.isRegistered = true;
     module.isResponding = true;
     module.statusPending = false;
+    module.lastResponseTime = GetTickCount();
+    module.statusRequestTime = 0;
     module.hasWeb4Keys = false;
     module.lastMessageTime = GetTickCount();
     module.messageCount = 0;
@@ -119,14 +121,22 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
 bool ModuleManager::DeregisterModule(uint8_t moduleId) {
     std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
-        modules.erase(it);
+        // Don't remove the module, just mark it as not registered
+        it->second.isRegistered = false;
+        it->second.isResponding = false;
+        it->second.state = ModuleState::OFF;
         return true;
     }
     return false;
 }
 
 void ModuleManager::DeregisterAllModules() {
-    modules.clear();
+    // Don't clear the list, just mark all modules as not registered
+    for (std::map<uint8_t, ModuleInfo>::iterator it = modules.begin(); it != modules.end(); ++it) {
+        it->second.isRegistered = false;
+        it->second.isResponding = false;
+        it->second.state = ModuleState::OFF;
+    }
 }
 
 bool ModuleManager::SetModuleState(uint8_t moduleId, ModuleState state) {
@@ -174,6 +184,7 @@ void ModuleManager::UpdateModuleStatus(uint8_t moduleId, const uint8_t* data) {
         }
     }
     
+    it->second.lastResponseTime = GetTickCount();
     it->second.lastMessageTime = GetTickCount();
     it->second.messageCount++;
     it->second.isResponding = true;
@@ -278,10 +289,33 @@ bool ModuleManager::IsModuleResponding(uint8_t moduleId) {
     return (it != modules.end() && it->second.isResponding);
 }
 
+void ModuleManager::CheckTimeouts(DWORD currentTime, DWORD timeoutMs) {
+    for (std::map<uint8_t, ModuleInfo>::iterator it = modules.begin(); it != modules.end(); ++it) {
+        ModuleInfo& module = it->second;
+        
+        // Only check timeout for registered modules that we're waiting on
+        if (module.isRegistered && module.waitingForStatusResponse) {
+            // Check if we've been waiting for a response longer than timeoutMs
+            if ((currentTime - module.statusRequestTime) > timeoutMs) {
+                // Module has timed out - deregister it
+                module.isRegistered = false;
+                module.isResponding = false;
+                module.waitingForStatusResponse = false;  // Clear the waiting flag
+                module.statusPending = false;  // Clear the pending flag too
+                module.state = ModuleState::OFF;
+            }
+        }
+    }
+}
+
 void ModuleManager::SetStatusPending(uint8_t moduleId, bool pending) {
     std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
         it->second.statusPending = pending;
+        if (pending) {
+            // Record when we started waiting for a response
+            it->second.statusRequestTime = GetTickCount();
+        }
     }
 }
 

@@ -195,15 +195,16 @@ object MainForm: TMainForm
         object DiscoverButton: TButton
           Left = 8
           Top = 8
-          Width = 65
+          Width = 100
           Height = 25
-          Caption = 'Discover'
+          Caption = 'Stop Discovery'
           Enabled = False
           TabOrder = 0
+          Tag = 1
           OnClick = DiscoverButtonClick
         end
         object RegisterButton: TButton
-          Left = 79
+          Left = 114
           Top = 8
           Width = 65
           Height = 25
@@ -213,7 +214,7 @@ object MainForm: TMainForm
           OnClick = RegisterButtonClick
         end
         object DeregisterButton: TButton
-          Left = 150
+          Left = 185
           Top = 8
           Width = 65
           Height = 25
@@ -222,7 +223,7 @@ object MainForm: TMainForm
           OnClick = DeregisterButtonClick
         end
         object DeregisterAllButton: TButton
-          Left = 221
+          Left = 256
           Top = 8
           Width = 65
           Height = 25

@@ -46,6 +46,8 @@ struct ModuleInfo {
     bool isRegistered;
     bool isResponding;
     bool statusPending;
+    DWORD lastResponseTime;     // GetTickCount() value of last response
+    DWORD statusRequestTime;    // GetTickCount() value when status was requested
     
     // Electrical data
     float voltage;          // Module voltage in V
@@ -87,7 +89,6 @@ struct ModuleInfo {
     // Message waiting flags to prevent flooding
     bool waitingForStatusResponse;   // Waiting for STATUS_1/2/3 after STATUS_REQUEST
     bool waitingForCellResponse;     // Waiting for MODULE_DETAIL after DETAIL_REQUEST
-    DWORD statusRequestTime;         // When we sent the status request
     DWORD cellRequestTime;           // When we sent the cell detail request
     
     // Web4 data
@@ -115,6 +116,9 @@ public:
     bool SetAllModulesState(ModuleState state);
     bool IsolateModule(uint8_t moduleId);
     bool EnableBalancing(uint8_t moduleId, uint8_t cellMask);
+    
+    // Timeout management
+    void CheckTimeouts(DWORD currentTime, DWORD timeoutMs = 5000);
     
     // Data updates from CAN messages
     void UpdateModuleStatus(uint8_t moduleId, const uint8_t* data);
