@@ -25,6 +25,17 @@ ModuleManager::ModuleManager()
     , totalMessages(0)
     , totalErrors(0) {
     startTime = GetTickCount();
+    
+    // Pre-initialize all 32 slots with uniqueId = 0 (indicates available)
+    for (uint8_t id = 1; id <= 32; id++) {
+        ModuleInfo module;
+        memset(&module, 0, sizeof(module));
+        module.moduleId = id;
+        module.uniqueId = 0;  // 0 = slot available
+        module.isRegistered = false;
+        module.isResponding = false;
+        modules[id] = module;
+    }
 }
 
 ModuleManager::~ModuleManager() {
@@ -160,7 +171,8 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
 bool ModuleManager::DeregisterModule(uint8_t moduleId) {
     std::map<uint8_t, ModuleInfo>::iterator it = modules.find(moduleId);
     if (it != modules.end()) {
-        // Don't remove the module, just mark it as not registered
+        // Clear unique ID to mark slot as available
+        it->second.uniqueId = 0;
         it->second.isRegistered = false;
         it->second.isResponding = false;
         it->second.state = ModuleState::OFF;
@@ -170,8 +182,9 @@ bool ModuleManager::DeregisterModule(uint8_t moduleId) {
 }
 
 void ModuleManager::DeregisterAllModules() {
-    // Don't clear the list, just mark all modules as not registered
+    // Clear unique IDs to mark all slots as available
     for (std::map<uint8_t, ModuleInfo>::iterator it = modules.begin(); it != modules.end(); ++it) {
+        it->second.uniqueId = 0;
         it->second.isRegistered = false;
         it->second.isResponding = false;
         it->second.state = ModuleState::OFF;
@@ -302,7 +315,10 @@ std::vector<ModuleInfo*> ModuleManager::GetAllModules() {
     std::vector<ModuleInfo*> result;
     for (std::map<uint8_t, ModuleInfo>::iterator iter = modules.begin(); iter != modules.end(); ++iter) {
         std::pair<const uint8_t, ModuleInfo>& pair = *iter;
-        result.push_back(&pair.second);
+        // Only return modules with valid (non-zero) unique IDs
+        if (pair.second.uniqueId != 0) {
+            result.push_back(&pair.second);
+        }
     }
     return result;
 }

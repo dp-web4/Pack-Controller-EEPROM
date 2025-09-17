@@ -1005,11 +1005,12 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
             }
         }
         
-        // If not found, assign next available ID
+        // If not found, assign next available ID  
         if (moduleId == 0) {
-            // Find lowest available ID starting from 1
+            // Find lowest available ID starting from 1 (check for uniqueId == 0)
             for (uint8_t id = 1; id <= 32; id++) {
-                if (!moduleManager->IsModuleRegistered(id)) {
+                PackEmulator::ModuleInfo* mod = moduleManager->GetModule(id);
+                if (mod && mod->uniqueId == 0) {
                     moduleId = id;
                     break;
                 }
