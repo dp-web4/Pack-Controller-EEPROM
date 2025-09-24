@@ -72,7 +72,14 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     MessagePollTimer->Interval = 10;  // 10ms for fast message processing
     MessagePollTimer->OnTimer = MessagePollTimerTimer;
     MessagePollTimer->Enabled = false;  // Will be enabled when connected
-    
+
+    // Connect CellGrid custom draw event for stale data visualization
+    // Note: Set DefaultDrawing to true to let grid draw the text, we'll just set colors
+    if (CellGrid) {
+        CellGrid->DefaultDrawing = true;  // Let grid handle text drawing
+        // Note: Custom coloring will be done differently due to VCL limitations
+    }
+
     LogMessage("Pack Controller Emulator initialized");
 }
 
@@ -459,6 +466,17 @@ void __fastcall TMainForm::UpdateTimerTimer(TObject *Sender) {
     // Update selected module details
     if (selectedModuleId) {
         UpdateModuleDetails(selectedModuleId);
+
+        // Refresh cell grid if viewing cells tab (to update staleness indicators)
+        if (DetailsPageControl->ActivePage == CellsTab) {
+            // Only refresh every 500ms to avoid excessive updates
+            static DWORD lastGridRefresh = 0;
+            DWORD currentTime = GetTickCount();
+            if (currentTime - lastGridRefresh > 500) {
+                UpdateCellDisplay(selectedModuleId);
+                lastGridRefresh = currentTime;
+            }
+        }
     }
     
     // Update module list periodically to show message counts and status changes
@@ -861,6 +879,7 @@ void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
     if (module->cellVoltages.size() < cellCount) {
         module->cellVoltages.resize(cellCount, 0.0f);
         module->cellTemperatures.resize(cellCount, 0.0f);
+        module->cellLastUpdateTimes.resize(cellCount, 0);
     }
     
     CellGrid->RowCount = cellCount + 1;
@@ -868,16 +887,43 @@ void TMainForm::UpdateCellDisplay(uint8_t moduleId) {
     CellGrid->Cells[1][0] = "Voltage (V)";
     CellGrid->Cells[2][0] = "Temp (°C)";
     
+    DWORD currentTime = GetTickCount();
     for (int i = 0; i < cellCount; i++) {
         CellGrid->Cells[0][i + 1] = IntToStr(i + 1);
-        
-        // Show 0.000 for missing cells (not communicating)
-        if (module->cellVoltages[i] == 0.0f) {
-            CellGrid->Cells[1][i + 1] = "0.000";
-            CellGrid->Cells[2][i + 1] = "0.0";
+
+        // Check if we've ever received data for this cell
+        bool hasReceivedData = (i < module->cellLastUpdateTimes.size() &&
+                               module->cellLastUpdateTimes[i] > 0);
+
+        if (module->cellVoltages[i] == 0.0f && !hasReceivedData) {
+            // Never received data - show dashes
+            CellGrid->Cells[1][i + 1] = "---";
+            CellGrid->Cells[2][i + 1] = "---";
         } else {
-            CellGrid->Cells[1][i + 1] = FloatToStrF(module->cellVoltages[i], ffFixed, 7, 3);
-            CellGrid->Cells[2][i + 1] = FloatToStrF(module->cellTemperatures[i], ffFixed, 7, 1);
+            // Calculate staleness
+            DWORD timeSinceUpdate = 0;
+            if (hasReceivedData) {
+                timeSinceUpdate = currentTime - module->cellLastUpdateTimes[i];
+            }
+
+            // Format value with staleness indicator
+            String voltStr = FloatToStrF(module->cellVoltages[i], ffFixed, 7, 3);
+            String tempStr = FloatToStrF(module->cellTemperatures[i], ffFixed, 7, 1);
+
+            // Add visual indicator based on staleness
+            if (timeSinceUpdate > 5000) {
+                // Very stale (> 5 seconds) - add ** prefix
+                voltStr = "**" + voltStr;
+                tempStr = "**" + tempStr;
+            } else if (timeSinceUpdate > 2000) {
+                // Stale (2-5 seconds) - add * prefix
+                voltStr = "*" + voltStr;
+                tempStr = "*" + tempStr;
+            }
+            // Fresh data - no prefix
+
+            CellGrid->Cells[1][i + 1] = voltStr;
+            CellGrid->Cells[2][i + 1] = tempStr;
         }
     }
 }
@@ -1225,6 +1271,7 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
         if (cellCount > 0 && module->cellVoltages.size() != cellCount) {
             module->cellVoltages.resize(cellCount, 0.0f);  // 0V for missing cells
             module->cellTemperatures.resize(cellCount, 0.0f);  // 0°C for missing cells
+            module->cellLastUpdateTimes.resize(cellCount, 0);  // No timestamp for missing cells
         }
         
         // Update the module list display to show new data
@@ -1289,6 +1336,7 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         if (module->cellVoltages.size() < expectedCount) {
             module->cellVoltages.resize(expectedCount, 0.0f);
             module->cellTemperatures.resize(expectedCount, 0.0f);
+            module->cellLastUpdateTimes.resize(expectedCount, 0);
         }
         
         // Check if cell ID is valid
@@ -1313,6 +1361,7 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         // Store the cell data
         module->cellVoltages[cellId] = cellVolt;
         module->cellTemperatures[cellId] = cellTemp;
+        module->cellLastUpdateTimes[cellId] = GetTickCount();  // Record per-cell update time
         module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
         
         LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) + 
@@ -1325,13 +1374,9 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
             // Update just this cell's row in the grid (row = cellId + 1 due to header)
             int gridRow = cellId + 1;
             if (gridRow < CellGrid->RowCount) {
-                if (cellVolt == 0.0f) {
-                    CellGrid->Cells[1][gridRow] = "0.000";
-                    CellGrid->Cells[2][gridRow] = "0.0";
-                } else {
-                    CellGrid->Cells[1][gridRow] = FloatToStrF(cellVolt, ffFixed, 7, 3);
-                    CellGrid->Cells[2][gridRow] = FloatToStrF(cellTemp, ffFixed, 7, 1);
-                }
+                // Since data is fresh, show without staleness indicator
+                CellGrid->Cells[1][gridRow] = FloatToStrF(cellVolt, ffFixed, 7, 3);
+                CellGrid->Cells[2][gridRow] = FloatToStrF(cellTemp, ffFixed, 7, 1);
             }
         }
     }
