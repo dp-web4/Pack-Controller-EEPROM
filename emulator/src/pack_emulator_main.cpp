@@ -2147,6 +2147,11 @@ void TMainForm::StartCSVExport() {
     exportEnabled = true;
     exportReceivedCount = 0;
 
+    // Update the filename label
+    if (ExportFileLabel) {
+        ExportFileLabel->Caption = filename;
+    }
+
     LogMessage("CSV export started: " + filename);
 }
 
@@ -2161,6 +2166,12 @@ void TMainForm::StopCSVExport() {
     }
 
     exportEnabled = false;
+
+    // Clear the filename label
+    if (ExportFileLabel) {
+        ExportFileLabel->Caption = "";
+    }
+
     LogMessage("CSV export stopped");
 }
 

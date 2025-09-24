@@ -85,6 +85,7 @@ __published:	// IDE-managed Components
     TStringGrid *CellGrid;
     // TChart *CellVoltageChart;  // Commented out - requires TeeChart component
     TCheckBox *ExportCheck;
+    TLabel *ExportFileLabel;
     
     // History tab controls
     TMemo *HistoryMemo;

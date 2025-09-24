@@ -424,15 +424,22 @@ object MainForm: TMainForm
           RowCount = 15
           TabOrder = 0
         end
-        object AutoRangeCheck: TCheckBox
+        object ExportCheck: TCheckBox
           Left = 376
           Top = 16
           Width = 97
           Height = 17
-          Caption = 'Auto Range'
-          Checked = True
-          State = cbChecked
+          Caption = 'Export CSV'
+          Checked = False
+          State = cbUnchecked
           TabOrder = 1
+        end
+        object ExportFileLabel: TLabel
+          Left = 376
+          Top = 36
+          Width = 200
+          Height = 13
+          Caption = ''
         end
       end
       object HistoryTab: TTabSheet
