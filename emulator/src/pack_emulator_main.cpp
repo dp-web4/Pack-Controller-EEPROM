@@ -2109,14 +2109,17 @@ void TMainForm::StartCSVExport() {
     // Create filename with timestamp
     time_t rawtime;
     struct tm* timeinfo;
-    char buffer[100];
+    char timeBuffer[50];
+    char filenameBuffer[100];
     time(&rawtime);
     timeinfo = localtime(&rawtime);
-    strftime(buffer, sizeof(buffer), "CellData_M%d_%Y%m%d_%H%M%S.csv", timeinfo);
 
-    // Insert module ID into filename
-    String filename = String(buffer);
-    filename = filename.Replace("M%d", "M" + IntToStr(exportModuleId));
+    // Format the time portion
+    strftime(timeBuffer, sizeof(timeBuffer), "%Y%m%d_%H%M%S", timeinfo);
+
+    // Combine with module ID to create full filename
+    sprintf(filenameBuffer, "CellData_M%d_%s.csv", exportModuleId, timeBuffer);
+    String filename = String(filenameBuffer);
 
     // Open CSV file
     csvFile = new std::ofstream(filename.c_str());
