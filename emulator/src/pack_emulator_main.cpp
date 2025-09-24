@@ -82,7 +82,7 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     }
 
     // Initialize CSV export variables
-    csvFile = nullptr;
+    csvFile = NULL;
     exportEnabled = false;
     currentCellPollCycle = 0;
     exportModuleId = 0;
@@ -2079,7 +2079,7 @@ void __fastcall TMainForm::ExportCheckClick(TObject *Sender) {
 
 //---------------------------------------------------------------------------
 void TMainForm::StartCSVExport() {
-    if (csvFile != nullptr) {
+    if (csvFile != NULL) {
         return;  // Already exporting
     }
 
@@ -2092,7 +2092,7 @@ void TMainForm::StartCSVExport() {
     }
 
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(exportModuleId);
-    if (module == nullptr) {
+    if (module == NULL) {
         ShowError("Selected module not found");
         ExportCheck->Checked = false;
         return;
@@ -2122,7 +2122,7 @@ void TMainForm::StartCSVExport() {
     csvFile = new std::ofstream(filename.c_str());
     if (!csvFile->is_open()) {
         delete csvFile;
-        csvFile = nullptr;
+        csvFile = NULL;
         ShowError("Failed to create CSV file: " + filename);
         ExportCheck->Checked = false;
         return;
@@ -2149,12 +2149,12 @@ void TMainForm::StartCSVExport() {
 
 //---------------------------------------------------------------------------
 void TMainForm::StopCSVExport() {
-    if (csvFile != nullptr) {
+    if (csvFile != NULL) {
         if (csvFile->is_open()) {
             csvFile->close();
         }
         delete csvFile;
-        csvFile = nullptr;
+        csvFile = NULL;
     }
 
     exportEnabled = false;
@@ -2163,7 +2163,7 @@ void TMainForm::StopCSVExport() {
 
 //---------------------------------------------------------------------------
 void TMainForm::WriteCSVRow() {
-    if (csvFile == nullptr || !csvFile->is_open()) {
+    if (csvFile == NULL || !csvFile->is_open()) {
         return;
     }
 
