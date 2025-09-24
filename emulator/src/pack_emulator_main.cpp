@@ -1350,31 +1350,43 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         }
 
         // Check if this cell actually reported data
-        if (cellId >= cellsReceived && cellsReceived > 0) {
+        bool cellDidNotReport = (cellId >= cellsReceived && cellsReceived > 0);
+
+        if (cellDidNotReport) {
             LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
                       " did not report (only " + IntToStr(cellsReceived) + " cells reported)");
-            // Continue processing to store the zero values
+
+            // Don't overwrite existing data - just mark the timestamp to show it's stale
+            // Only update timestamp if we previously had data (non-zero timestamp)
+            if (module->cellLastUpdateTimes[cellId] > 0) {
+                // Keep the existing voltage/temperature but don't update timestamp
+                // This makes the data appear stale immediately
+            }
+            // If we never had data (timestamp == 0), leave everything as is
+            module->lastMessageTime = GetTickCount();  // Still update module timestamp
+            return;  // Don't process the zero values from MODULE_DETAIL
         }
 
+        // Cell did report - parse the actual data
         // Parse temperature (little-endian, with -55.35°C offset)
         uint16_t tempRaw = data[2] | (data[3] << 8);
         float cellTemp = (tempRaw * 0.01f) - 55.35f;
-        
+
         // Parse voltage (little-endian, 0.001V per bit)
         uint16_t voltRaw = data[4] | (data[5] << 8);
         float cellVolt = voltRaw * 0.001f;
-        
+
         // Parse SOC and SOH
         float cellSOC = data[6] * 0.5f;
         float cellSOH = data[7] * 0.5f;
-        
+
         // Store the cell data
         module->cellVoltages[cellId] = cellVolt;
         module->cellTemperatures[cellId] = cellTemp;
         module->cellLastUpdateTimes[cellId] = GetTickCount();  // Record per-cell update time
         module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
-        
-        LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) + 
+
+        LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
                   ": " + FloatToStrF(cellVolt, ffFixed, 7, 3) + "V, " +
                   FloatToStrF(cellTemp, ffFixed, 7, 1) + "°C");
         
