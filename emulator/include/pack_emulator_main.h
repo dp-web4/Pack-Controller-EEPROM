@@ -19,6 +19,10 @@
 
 #include "module_manager.h"
 #include "can_interface.h"
+#include <fstream>
+#include <vector>
+#include <ctime>
+#include <iomanip>
 
 //---------------------------------------------------------------------------
 class TMainForm : public TForm, public PackEmulator::CANCallbackInterface
@@ -80,7 +84,7 @@ __published:	// IDE-managed Components
     // Cells tab controls
     TStringGrid *CellGrid;
     // TChart *CellVoltageChart;  // Commented out - requires TeeChart component
-    TCheckBox *AutoRangeCheck;
+    TCheckBox *ExportCheck;
     
     // History tab controls
     TMemo *HistoryMemo;
@@ -154,6 +158,7 @@ __published:	// IDE-managed Components
     void __fastcall FormCreate(TObject *Sender);
     void __fastcall FormDestroy(TObject *Sender);
     void __fastcall DetailsPageControlChange(TObject *Sender);
+    void __fastcall ExportCheckClick(TObject *Sender);
     
 private:	// User declarations
     PackEmulator::ModuleManager* moduleManager;
@@ -194,7 +199,22 @@ private:	// User declarations
     
     // Message polling timer
     TTimer *MessagePollTimer;
-    
+
+    // CSV export functionality
+    std::ofstream* csvFile;
+    bool exportEnabled;
+    int currentCellPollCycle;  // Track which cell we're polling (0 to expectedCount-1)
+    std::vector<float> exportVoltages;  // Buffer to collect voltages for current cycle
+    std::vector<float> exportTemperatures;  // Buffer to collect temperatures for current cycle
+    uint8_t exportModuleId;  // Module being exported
+    uint8_t exportExpectedCount;  // Expected cells for current export
+    uint8_t exportReceivedCount;  // Cells that actually reported
+
+    // CSV export methods
+    void StartCSVExport();
+    void StopCSVExport();
+    void WriteCSVRow();
+
     // UI update functions
     void UpdateModuleList();
     void UpdateModuleDetails(uint8_t moduleId);

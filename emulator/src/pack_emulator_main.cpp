@@ -8,6 +8,7 @@
 #include <sstream>
 #include <iomanip>
 #include <windows.h>
+#include <algorithm>  // For std::fill and std::max
 
 // Windows message for scrolling edit controls
 #ifndef EM_LINESCROLL
@@ -80,12 +81,32 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
         // Note: Custom coloring will be done differently due to VCL limitations
     }
 
+    // Initialize CSV export variables
+    csvFile = nullptr;
+    exportEnabled = false;
+    currentCellPollCycle = 0;
+    exportModuleId = 0;
+    exportExpectedCount = 0;
+    exportReceivedCount = 0;
+
+    // Connect ExportCheck event handler
+    if (ExportCheck) {
+        ExportCheck->OnClick = ExportCheckClick;
+        ExportCheck->Checked = false;  // Default to off
+    }
+
     LogMessage("Pack Controller Emulator initialized");
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::FormDestroy(TObject *Sender) {
     (void)Sender;  // Suppress unused parameter warning
+
+    // Stop CSV export if running
+    if (exportEnabled) {
+        StopCSVExport();
+    }
+
     // Clean up dynamically allocated objects
     if (isConnected) {
         DisconnectButtonClick(NULL);
@@ -1389,6 +1410,37 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
                   ": " + FloatToStrF(cellVolt, ffFixed, 7, 3) + "V, " +
                   FloatToStrF(cellTemp, ffFixed, 7, 1) + "°C");
+
+        // If CSV export is enabled for this module, collect the data
+        if (exportEnabled && moduleId == exportModuleId) {
+            // Store this cell's data
+            if (cellId < exportExpectedCount) {
+                exportVoltages[cellId] = cellVolt;
+                exportTemperatures[cellId] = cellTemp;
+
+                // Track highest cell ID seen
+                if (cellId == currentCellPollCycle) {
+                    currentCellPollCycle++;
+                }
+
+                // Count cells that actually reported (non-zero voltage)
+                if (cellVolt > 0.01f) {  // Consider > 10mV as reporting
+                    exportReceivedCount = std::max(exportReceivedCount, (uint8_t)(cellId + 1));
+                }
+
+                // Check if we've completed a full cycle
+                if (currentCellPollCycle >= exportExpectedCount) {
+                    // Write the row and reset for next cycle
+                    WriteCSVRow();
+
+                    // Reset for next cycle
+                    currentCellPollCycle = 0;
+                    exportReceivedCount = 0;
+                    std::fill(exportVoltages.begin(), exportVoltages.end(), 0.0f);
+                    std::fill(exportTemperatures.begin(), exportTemperatures.end(), 0.0f);
+                }
+            }
+        }
         
         // Update only the specific cell row in the display if this module is selected
         // This avoids the display glitch where values alternate between actual and zero
@@ -2010,6 +2062,131 @@ void TMainForm::SendDiscoveryRequest() {
     if (canInterface->SendMessage(announceExtId, data, 8, true)) {
         LogMessage("→ 0x51D [Discovery Request] Broadcasting to all modules");
     }
+}
+
+//---------------------------------------------------------------------------
+// CSV Export functionality
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::ExportCheckClick(TObject *Sender) {
+    (void)Sender;
+
+    if (ExportCheck->Checked) {
+        StartCSVExport();
+    } else {
+        StopCSVExport();
+    }
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::StartCSVExport() {
+    if (csvFile != nullptr) {
+        return;  // Already exporting
+    }
+
+    // Get currently selected module
+    exportModuleId = selectedModuleId;
+    if (exportModuleId == 0) {
+        ShowError("Please select a module before starting export");
+        ExportCheck->Checked = false;
+        return;
+    }
+
+    PackEmulator::ModuleInfo* module = moduleManager->GetModule(exportModuleId);
+    if (module == nullptr) {
+        ShowError("Selected module not found");
+        ExportCheck->Checked = false;
+        return;
+    }
+
+    // Get expected cell count
+    exportExpectedCount = module->cellCount;
+    if (exportExpectedCount == 0) {
+        ShowError("Module has no cells configured");
+        ExportCheck->Checked = false;
+        return;
+    }
+
+    // Create filename with timestamp
+    time_t rawtime;
+    struct tm* timeinfo;
+    char buffer[100];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buffer, sizeof(buffer), "CellData_M%d_%Y%m%d_%H%M%S.csv", timeinfo);
+
+    // Insert module ID into filename
+    String filename = String(buffer);
+    filename = filename.Replace("M%d", "M" + IntToStr(exportModuleId));
+
+    // Open CSV file
+    csvFile = new std::ofstream(filename.c_str());
+    if (!csvFile->is_open()) {
+        delete csvFile;
+        csvFile = nullptr;
+        ShowError("Failed to create CSV file: " + filename);
+        ExportCheck->Checked = false;
+        return;
+    }
+
+    // Write header
+    *csvFile << "Timestamp,CellsExpected,CellsReceived";
+    for (int i = 0; i < exportExpectedCount; i++) {
+        *csvFile << ",V" << (i + 1) << ",T" << (i + 1);
+    }
+    *csvFile << std::endl;
+
+    // Initialize buffers
+    exportVoltages.clear();
+    exportVoltages.resize(exportExpectedCount, 0.0f);
+    exportTemperatures.clear();
+    exportTemperatures.resize(exportExpectedCount, 0.0f);
+    currentCellPollCycle = 0;
+    exportEnabled = true;
+    exportReceivedCount = 0;
+
+    LogMessage("CSV export started: " + filename);
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::StopCSVExport() {
+    if (csvFile != nullptr) {
+        if (csvFile->is_open()) {
+            csvFile->close();
+        }
+        delete csvFile;
+        csvFile = nullptr;
+    }
+
+    exportEnabled = false;
+    LogMessage("CSV export stopped");
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::WriteCSVRow() {
+    if (csvFile == nullptr || !csvFile->is_open()) {
+        return;
+    }
+
+    // Get current timestamp
+    time_t rawtime;
+    struct tm* timeinfo;
+    char buffer[30];
+    time(&rawtime);
+    timeinfo = localtime(&rawtime);
+    strftime(buffer, sizeof(buffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+
+    // Write timestamp and counts
+    *csvFile << buffer << "," << (int)exportExpectedCount << "," << (int)exportReceivedCount;
+
+    // Write all cell data
+    for (int i = 0; i < exportExpectedCount; i++) {
+        *csvFile << "," << std::fixed << std::setprecision(3) << exportVoltages[i];
+        *csvFile << "," << std::fixed << std::setprecision(1) << exportTemperatures[i];
+    }
+    *csvFile << std::endl;
+    csvFile->flush();  // Ensure data is written immediately
+
+    LogMessage("CSV row written for " + IntToStr(exportReceivedCount) + " cells");
 }
 
 //---------------------------------------------------------------------------
