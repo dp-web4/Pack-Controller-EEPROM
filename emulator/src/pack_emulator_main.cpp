@@ -1316,36 +1316,46 @@ void TMainForm::ProcessModuleFault(uint8_t moduleId, const uint8_t* data) {
 }
 
 void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
-    // Parse MODULE_DETAIL (0x505) according to ModuleCPU code:
-    // Byte 0: Cell ID
-    // Byte 1: Expected cell count  
+    // Parse MODULE_DETAIL (0x505) - Protocol updated Sept 24, 2025:
+    // Byte 0: Cell ID (requested cell number)
+    // Byte 1: Cells received (actual cells that reported in last complete frame)
     // Bytes 2-3: Cell temperature (16 bits, 0.01°C per bit, -55.35°C offset)
     // Bytes 4-5: Cell voltage (16 bits, 0.001V per bit)
     // Byte 6: Cell SOC (0.5% per bit)
     // Byte 7: Cell SOH (0.5% per bit)
-    
+
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
         // Clear the waiting flag - we got a response
         module->waitingForCellResponse = false;
-        
+
         uint8_t cellId = data[0];
-        uint8_t expectedCount = data[1];
-        
+        uint8_t cellsReceived = data[1];  // Now reports actual cells received, not expected
+
+        // Use the expected count from module status, or cellsReceived if not available
+        uint8_t expectedCount = module->cellCount > 0 ? module->cellCount : cellsReceived;
+
         // Initialize arrays to expected size if needed (with default values for missing cells)
         if (module->cellVoltages.size() < expectedCount) {
             module->cellVoltages.resize(expectedCount, 0.0f);
             module->cellTemperatures.resize(expectedCount, 0.0f);
             module->cellLastUpdateTimes.resize(expectedCount, 0);
         }
-        
-        // Check if cell ID is valid
+
+        // Check if cell ID is within expected range
         if (cellId >= expectedCount) {
-            LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) + 
+            LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
                       " out of range (expected " + IntToStr(expectedCount) + " cells)");
             return;
         }
-        
+
+        // Check if this cell actually reported data
+        if (cellId >= cellsReceived && cellsReceived > 0) {
+            LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
+                      " did not report (only " + IntToStr(cellsReceived) + " cells reported)");
+            // Continue processing to store the zero values
+        }
+
         // Parse temperature (little-endian, with -55.35°C offset)
         uint16_t tempRaw = data[2] | (data[3] << 8);
         float cellTemp = (tempRaw * 0.01f) - 55.35f;

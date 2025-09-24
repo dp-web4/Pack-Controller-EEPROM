@@ -80,6 +80,7 @@ struct ModuleInfo {
     uint16_t cellI2CErrors; // I2C error count (from CELL_COMM_STATUS)
     std::vector<float> cellVoltages;
     std::vector<float> cellTemperatures;
+    std::vector<DWORD> cellLastUpdateTimes;  // Per-cell last update timestamps (ms since boot)
     
     // Timing (using Windows GetTickCount - milliseconds since boot)
     DWORD lastMessageTime;
