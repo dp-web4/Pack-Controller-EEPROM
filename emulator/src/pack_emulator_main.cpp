@@ -2117,8 +2117,8 @@ void TMainForm::StartCSVExport() {
     // Format the time portion
     strftime(timeBuffer, sizeof(timeBuffer), "%Y%m%d_%H%M%S", timeinfo);
 
-    // Combine with module ID to create full filename
-    sprintf(filenameBuffer, "CellData_M%d_%s.csv", exportModuleId, timeBuffer);
+    // Combine with module unique ID to create full filename (makes it traceable to specific hardware)
+    sprintf(filenameBuffer, "CellData_%08X_%s.csv", module->uniqueId, timeBuffer);
     String filename = String(filenameBuffer);
 
     // Open CSV file
