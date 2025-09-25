@@ -1371,19 +1371,21 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         }
 
         // Check if this cell actually reported data
-        bool cellDidNotReport = (cellId >= cellsReceived && cellsReceived > 0);
+        bool cellDidNotReport = (cellId >= cellsReceived);
 
         if (cellDidNotReport) {
-            LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
-                      " did not report (only " + IntToStr(cellsReceived) + " cells reported)");
-
-            // Don't overwrite existing data - just mark the timestamp to show it's stale
-            // Only update timestamp if we previously had data (non-zero timestamp)
-            if (module->cellLastUpdateTimes[cellId] > 0) {
-                // Keep the existing voltage/temperature but don't update timestamp
-                // This makes the data appear stale immediately
+            if (cellsReceived == 0) {
+                // Complete VUART failure - all cells are stale
+                LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
+                          " - NO cells reporting (VUART failure)");
+            } else {
+                LogMessage("Module " + IntToStr(moduleId) + " Cell " + IntToStr(cellId) +
+                          " did not report (only " + IntToStr(cellsReceived) + " cells reported)");
             }
-            // If we never had data (timestamp == 0), leave everything as is
+
+            // Don't overwrite existing data with zeros - preserve last valid values
+            // Don't update timestamp - this makes the data appear stale
+            // The UI will show asterisks based on stale timestamps
             module->lastMessageTime = GetTickCount();  // Still update module timestamp
             return;  // Don't process the zero values from MODULE_DETAIL
         }
