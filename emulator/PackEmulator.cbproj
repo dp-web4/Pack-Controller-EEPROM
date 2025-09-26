@@ -71,7 +71,7 @@
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base)'!=''">
         <DCC_Namespace>System;Xml;Data;Datasnap;Web;Soap;Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;$(DCC_Namespace)</DCC_Namespace>
-        <Icon_MainIcon>$(BDS)\bin\cbuilder_PROJECTICON.ico</Icon_MainIcon>
+        <Icon_MainIcon>modbatt.ico</Icon_MainIcon>
         <_TCHARMapping>wchar_t</_TCHARMapping>
         <ProjectType>CppVCLApplication</ProjectType>
         <PackageImports>rtl.bpi;vcl.bpi;$(PackageImports)</PackageImports>
@@ -131,6 +131,7 @@
         <OutputExt>exe</OutputExt>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Cfg_1_Win32)'!=''">
+        <Icon_MainIcon>modbatt.ico</Icon_MainIcon>
         <VerInfo_Keys>CompanyName=;FileDescription=$(MSBuildProjectName);FileVersion=1.0.0.0;InternalName=;LegalCopyright=;LegalTrademarks=;OriginalFilename=;ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=;ProgramID=com.embarcadero.$(MSBuildProjectName)</VerInfo_Keys>
         <BCC_UseClassicCompiler>true</BCC_UseClassicCompiler>
         <VerInfo_Locale>1033</VerInfo_Locale>
@@ -173,6 +174,9 @@
         <CppCompile Include="src\PCANBasicClass.cpp">
             <BuildOrder>4</BuildOrder>
         </CppCompile>
+        <ResFiles Include="Win32\PackEmulator.res">
+            <BuildOrder>5</BuildOrder>
+        </ResFiles>
         <FormResources Include="src\pack_emulator_main.dfm"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>

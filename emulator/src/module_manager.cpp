@@ -141,8 +141,8 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     
     // Initialize cell count data
     module.cellCount = 0;      // Will be updated from STATUS_1
-    module.cellCountMin = 0;   // Will be updated from CELL_COMM_STATUS
-    module.cellCountMax = 0;   // Will be updated from CELL_COMM_STATUS
+    module.cellCountMin = 255; // Start at max (0xFF) - will decrease as cells report
+    module.cellCountMax = 0;   // Start at 0 - will increase as cells report
     module.cellsReceived = 0;  // Will be updated from MODULE_DETAIL
     module.cellI2CErrors = 0;
     

@@ -813,13 +813,22 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     StatusGrid->Cells[1][11] = FloatToStrF(module->maxDischargeCurrent, ffFixed, 7, 1) + " A";
     
     StatusGrid->Cells[0][12] = "Cell Count";
-    if (module->cellCountMin > 0 || module->cellCountMax > 0) {
-        StatusGrid->Cells[1][12] = "Exp:" + IntToStr(module->cellCount) + 
-                                   " Min:" + IntToStr(module->cellCountMin) +
-                                   " Max:" + IntToStr(module->cellCountMax);
+    String cellCountStr = "Exp:" + IntToStr(module->cellCount);
+
+    // Show min/max based on what we've seen
+    if (module->cellCountMin == 255) {
+        // Still uninitialized - haven't received STATUS_1 yet
+        cellCountStr += " (Waiting for status)";
+    } else if (module->cellCountMax == 0) {
+        // Have expected count but no cells have reported yet
+        cellCountStr += " Min:" + IntToStr(module->cellCountMin) + " Max:0 (No cells yet)";
     } else {
-        StatusGrid->Cells[1][12] = "Exp:" + IntToStr(module->cellCount) + " (No comm data)";
+        // Have seen cells report
+        cellCountStr += " Min:" + IntToStr(module->cellCountMin) +
+                       " Max:" + IntToStr(module->cellCountMax);
     }
+
+    StatusGrid->Cells[1][12] = cellCountStr;
     
     // Update cell display
     UpdateCellDisplay(moduleId);
@@ -1286,7 +1295,18 @@ void TMainForm::ProcessModuleStatus1(uint8_t moduleId, const uint8_t* data) {
         module->isResponding = true;
         module->messageCount++;
         module->lastMessageTime = GetTickCount();  // Update timestamp to prevent timeout
-        
+
+        // Initialize min/max based on expected count if not yet set properly
+        if (cellCount > 0) {
+            // If min is still at initial 255 (uninitialized), set it to expected count
+            // This represents "we expect this many but haven't seen fewer yet"
+            if (module->cellCountMin == 255) {
+                module->cellCountMin = cellCount;
+            }
+            // Max stays at 0 until we actually see cells report
+            // (max=0 means we haven't seen any cells yet)
+        }
+
         // Initialize cell arrays if cell count changed
         if (cellCount > 0 && module->cellVoltages.size() != cellCount) {
             module->cellVoltages.resize(cellCount, 0.0f);  // 0V for missing cells
@@ -1355,6 +1375,19 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
         // Update cellsReceived if it has changed (avoid unnecessary UI updates)
         if (module->cellsReceived != cellsReceived) {
             module->cellsReceived = cellsReceived;
+
+            // Update min/max based on cells actually received
+            if (cellsReceived > 0) {
+                // Update min if we received fewer cells
+                if (cellsReceived < module->cellCountMin) {
+                    module->cellCountMin = cellsReceived;
+                }
+                // Update max if we received more cells
+                if (cellsReceived > module->cellCountMax) {
+                    module->cellCountMax = cellsReceived;
+                }
+            }
+
             // Trigger module list update to show new received count
             UpdateModuleList();
         }
@@ -1554,8 +1587,17 @@ void TMainForm::ProcessModuleCellCommStatus(uint8_t moduleId, const uint8_t* dat
     
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
-        module->cellCountMin = data[0];
-        module->cellCountMax = data[1];
+        uint8_t reportedMin = data[0];
+        uint8_t reportedMax = data[1];
+
+        // ModuleCPU reports 255 (0xFF) for min when no cells have been seen
+        // Only update if we have valid data (not 255 for min)
+        if (reportedMin != 255) {
+            module->cellCountMin = reportedMin;
+        }
+        // Always update max
+        module->cellCountMax = reportedMax;
+
         module->cellI2CErrors = data[2] | (data[3] << 8);
         
         uint8_t mcRxErrors = data[4];

@@ -1,0 +1,4 @@
+// PackEmulator Resource Script
+#define MAINICON 1
+
+MAINICON ICON "modbatt.ico"
