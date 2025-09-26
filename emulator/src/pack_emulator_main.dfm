@@ -402,11 +402,12 @@ object MainForm: TMainForm
           Left = 240
           Top = 16
           Width = 290
-          Height = 337
+          Height = 350
           ColCount = 2
           DefaultColWidth = 140
           FixedCols = 0
-          RowCount = 10
+          RowCount = 14
+          ScrollBars = ssNone
           TabOrder = 0
         end
       end
