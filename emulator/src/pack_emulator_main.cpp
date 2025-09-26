@@ -2049,6 +2049,12 @@ void TMainForm::SendStatusRequest() {
         if (++statusLogCounter % 50 == 0) {
             LogMessage("→ 0x512 [Status Request] to module " + IntToStr(moduleId));
         }
+
+        // Also request first cell detail to ensure cells received count is updated
+        // This helps keep the module status display current
+        messageFlags.cellDetail = true;
+        messageFlags.cellModuleId = moduleId;
+        messageFlags.cellId = 0;  // Request first cell
     }
 }
 
