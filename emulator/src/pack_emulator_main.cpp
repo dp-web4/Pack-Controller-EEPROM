@@ -754,7 +754,7 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     SOHLabel->Caption = "SOH: " + FloatToStrF(module->soh, ffFixed, 7, 1) + " %";
     
     // Update StatusGrid with additional module information
-    StatusGrid->RowCount = 13;  // Increase rows for more data
+    StatusGrid->RowCount = 14;  // Increase rows for more data (added Max Charge V)
     StatusGrid->Cells[0][0] = "Property";
     StatusGrid->Cells[1][0] = "Value";
     
@@ -811,8 +811,11 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
     
     StatusGrid->Cells[0][11] = "Max Discharge I";
     StatusGrid->Cells[1][11] = FloatToStrF(module->maxDischargeCurrent, ffFixed, 7, 1) + " A";
-    
-    StatusGrid->Cells[0][12] = "Cell Count";
+
+    StatusGrid->Cells[0][12] = "Max Charge V";
+    StatusGrid->Cells[1][12] = FloatToStrF(module->maxChargeVoltage, ffFixed, 7, 1) + " V";
+
+    StatusGrid->Cells[0][13] = "Cell Count";
     String cellCountStr = "Exp:" + IntToStr(module->cellCount);
 
     // Show min/max based on what we've seen
@@ -828,7 +831,7 @@ void TMainForm::UpdateModuleDetails(uint8_t moduleId) {
                        " Max:" + IntToStr(module->cellCountMax);
     }
 
-    StatusGrid->Cells[1][12] = cellCountStr;
+    StatusGrid->Cells[1][13] = cellCountStr;
     
     // Update cell display
     UpdateCellDisplay(moduleId);
@@ -1618,11 +1621,11 @@ void TMainForm::ProcessModuleCellCommStatus(uint8_t moduleId, const uint8_t* dat
 
 void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
     // Parse MODULE_HARDWARE according to can_frm_mod.h:
-    // Bytes 0-1: maxChargeA (16 bits, 0.1A per bit)
-    // Bytes 2-3: maxDischargeA (16 bits, 0.1A per bit)
-    // Bytes 4-5: maxChargeEndV (16 bits, 0.01V per bit)
+    // Bytes 0-1: maxChargeA (16 bits, 0.02A per bit with -655.36A base)
+    // Bytes 2-3: maxDischargeA (16 bits, 0.02A per bit with -655.36A base)
+    // Bytes 4-5: maxChargeEndV (16 bits, 0.015V per bit - matches module voltage encoding)
     // Bytes 6-7: hwVersion (16 bits)
-    
+
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(moduleId);
     if (module != NULL) {
         // LITTLE ENDIAN byte order
@@ -1630,11 +1633,11 @@ void TMainForm::ProcessModuleHardware(uint8_t moduleId, const uint8_t* data) {
         uint16_t maxDischarge = data[2] | (data[3] << 8);
         uint16_t maxVoltage = data[4] | (data[5] << 8);
         uint16_t hwVersion = data[6] | (data[7] << 8);
-        
+
         // Currents use MODULE_CURRENT_BASE and MODULE_CURRENT_FACTOR
         module->maxChargeCurrent = -655.36f + (maxCharge * 0.02f);
         module->maxDischargeCurrent = -655.36f + (maxDischarge * 0.02f);
-        module->maxChargeVoltage = maxVoltage * 0.01f;
+        module->maxChargeVoltage = maxVoltage * 0.015f;  // 15mV increments to match module voltage encoding
         module->hardwareVersion = hwVersion;
         
         LogMessage("Module " + IntToStr(moduleId) + " HARDWARE: MaxChg=" + 

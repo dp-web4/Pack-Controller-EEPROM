@@ -401,9 +401,9 @@ object MainForm: TMainForm
         object StatusGrid: TStringGrid
           Left = 240
           Top = 16
-          Width = 441
+          Width = 290
           Height = 337
-          ColCount = 3
+          ColCount = 2
           DefaultColWidth = 140
           FixedCols = 0
           RowCount = 10
