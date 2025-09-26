@@ -88,8 +88,11 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
             it->second.waitingForCellResponse = false;
             it->second.statusRequestTime = 0;
             it->second.cellRequestTime = 0;
-            
-            // Don't clear electrical/cell data - keep last known values
+
+            // Reset cells received to 0 - will be updated from MODULE_DETAIL
+            it->second.cellsReceived = 0;
+
+            // Don't clear other electrical/cell data - keep last known values
             // This allows UI to show historical data even after re-registration
             
             return true;
@@ -139,7 +142,8 @@ bool ModuleManager::RegisterModule(uint8_t moduleId, uint32_t uniqueId) {
     // Initialize cell count data
     module.cellCount = 0;      // Will be updated from STATUS_1
     module.cellCountMin = 0;   // Will be updated from CELL_COMM_STATUS
-    module.cellCountMax = 0;   // Will be updated from CELL_COMM_STATUS  
+    module.cellCountMax = 0;   // Will be updated from CELL_COMM_STATUS
+    module.cellsReceived = 0;  // Will be updated from MODULE_DETAIL
     module.cellI2CErrors = 0;
     
     // Initialize cell statistics

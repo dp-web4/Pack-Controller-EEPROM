@@ -178,8 +178,8 @@ object MainForm: TMainForm
           end
           item
             AutoSize = True
-            Caption = 'Cells (Min/Max/Exp)'
-            MinWidth = 90
+            Caption = 'Cells (Rcvd/Exp)'
+            MinWidth = 75
           end
           item
             AutoSize = True

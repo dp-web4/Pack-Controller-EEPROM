@@ -686,14 +686,13 @@ void TMainForm::UpdateModuleList() {
         String socStr = FloatToStrF(soc, ffFixed, 7, 1) + "%";
         item->SubItems->Add(socStr);
         
-        // Add cell count (min/max/expected)
-        if (module->cellCount > 0 || module->cellCountMin > 0 || module->cellCountMax > 0) {
-            String cellStr = IntToStr(module->cellCountMin) + "/" + 
-                           IntToStr(module->cellCountMax) + "/" +
+        // Add cell count (received/expected)
+        if (module->cellCount > 0) {
+            String cellStr = IntToStr(module->cellsReceived) + "/" +
                            IntToStr(module->cellCount);
             item->SubItems->Add(cellStr);
         } else {
-            item->SubItems->Add("-/-/-");
+            item->SubItems->Add("-/-");
         }
         
         // Add message count to debug if we're receiving data
@@ -1352,6 +1351,13 @@ void TMainForm::ProcessModuleDetail(uint8_t moduleId, const uint8_t* data) {
 
         uint8_t cellId = data[0];
         uint8_t cellsReceived = data[1];  // Now reports actual cells received, not expected
+
+        // Update cellsReceived if it has changed (avoid unnecessary UI updates)
+        if (module->cellsReceived != cellsReceived) {
+            module->cellsReceived = cellsReceived;
+            // Trigger module list update to show new received count
+            UpdateModuleList();
+        }
 
         // Use the expected count from module status, or cellsReceived if not available
         uint8_t expectedCount = module->cellCount > 0 ? module->cellCount : cellsReceived;

@@ -77,6 +77,7 @@ struct ModuleInfo {
     uint8_t cellCount;      // Expected number of cells (from STATUS_1)
     uint8_t cellCountMin;   // Minimum cells seen (from CELL_COMM_STATUS)
     uint8_t cellCountMax;   // Maximum cells seen (from CELL_COMM_STATUS)
+    uint8_t cellsReceived;  // Last reported cells received (from MODULE_DETAIL)
     uint16_t cellI2CErrors; // I2C error count (from CELL_COMM_STATUS)
     std::vector<float> cellVoltages;
     std::vector<float> cellTemperatures;
