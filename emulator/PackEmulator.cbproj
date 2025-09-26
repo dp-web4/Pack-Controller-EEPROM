@@ -88,6 +88,7 @@
         <BT_BuildType>Debug</BT_BuildType>
         <VerInfo_Keys>CompanyName=Modular Battery Technologies, Inc.;FileDescription=Pack Controller Emulator;FileVersion=1.0.0.0;InternalName=PackEmulator;LegalCopyright=Copyright 2025;LegalTrademarks=;OriginalFilename=PackEmulator.exe;ProductName=Pack Controller Emulator;ProductVersion=1.0.0.0;Comments=</VerInfo_Keys>
         <VerInfo_Locale>1033</VerInfo_Locale>
+        <Icon_MainIcon>modbatt.ico</Icon_MainIcon>
         <Manifest_File>$(BDS)\bin\default_app.manifest</Manifest_File>
     </PropertyGroup>
     <PropertyGroup Condition="'$(Base_Win64)'!=''">
@@ -174,9 +175,9 @@
         <CppCompile Include="src\PCANBasicClass.cpp">
             <BuildOrder>4</BuildOrder>
         </CppCompile>
-        <RcCompile Include="PackEmulator.rc">
+        <ResFiles Include="PackEmulator.res">
             <BuildOrder>5</BuildOrder>
-        </RcCompile>
+        </ResFiles>
         <FormResources Include="src\pack_emulator_main.dfm"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
