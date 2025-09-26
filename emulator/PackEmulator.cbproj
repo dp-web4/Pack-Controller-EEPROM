@@ -174,9 +174,9 @@
         <CppCompile Include="src\PCANBasicClass.cpp">
             <BuildOrder>4</BuildOrder>
         </CppCompile>
-        <ResFiles Include="modbatt.res">
+        <RcCompile Include="PackEmulator.rc">
             <BuildOrder>5</BuildOrder>
-        </ResFiles>
+        </RcCompile>
         <FormResources Include="src\pack_emulator_main.dfm"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
