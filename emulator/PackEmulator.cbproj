@@ -174,8 +174,11 @@
         <CppCompile Include="src\PCANBasicClass.cpp">
             <BuildOrder>4</BuildOrder>
         </CppCompile>
-        <ResFiles Include="PackEmulator.res">
+        <RcCompile Include="PackEmulator.rc">
             <BuildOrder>5</BuildOrder>
+        </RcCompile>
+        <ResFiles Include="PackEmulator.res">
+            <BuildOrder>6</BuildOrder>
         </ResFiles>
         <FormResources Include="src\pack_emulator_main.dfm"/>
         <BuildConfiguration Include="Base">
