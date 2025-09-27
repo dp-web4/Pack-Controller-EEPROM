@@ -444,14 +444,9 @@ void __fastcall TMainForm::ModuleListViewSelectItem(TObject *Sender,
     TListItem *Item, bool Selected) {
     (void)Sender;  // Suppress unused parameter warning
     if (Selected && Item) {
-        // Check if the module is registered (status column is SubItems[1])
-        if (Item->SubItems->Count > 1 && Item->SubItems->Strings[1] == "---") {
-            // Module is deregistered, prevent selection
-            Item->Selected = false;
-            LogMessage("Cannot select deregistered module");
-            return;
-        }
-        
+        // Allow selection of both registered and deregistered modules
+        // This lets users inspect deregistered modules for debugging
+
         // Extract module ID from "[ID]" format
         String caption = Item->Caption;
         caption = caption.SubString(2, caption.Length() - 2);  // Remove [ and ]
