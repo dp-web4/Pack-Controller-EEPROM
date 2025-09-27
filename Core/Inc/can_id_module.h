@@ -34,4 +34,35 @@
 #define ID_MODULE_ALL_DEREGISTER    0x51E
 #define ID_MODULE_ALL_ISOLATE       0x51F
 
+// SD Card Transfer Messages
+// Pack Controller to Module Controller
+#define ID_SD_SECTOR_REQUEST        0x3F0  // Base ID, add module ID
+#define ID_SD_WINDOW_ACK            0x3F2  // Base ID, add module ID
+
+// Module Controller to Pack Controller
+#define ID_SD_DATA_CHUNK            0x3F1  // Base ID for extended frames
+#define ID_SD_TRANSFER_STATUS       0x3F3  // Base ID, add module ID
+
+// SD Card Transfer Constants
+#define SD_SECTOR_SIZE              512
+#define SD_CHUNK_SIZE               8
+#define SD_CHUNKS_PER_WINDOW        16
+#define SD_WINDOW_SIZE              128    // 16 chunks * 8 bytes
+#define SD_WINDOWS_PER_SECTOR       4      // 512 bytes / 128 bytes
+#define SD_TOTAL_CHUNKS             64     // 512 bytes / 8 bytes
+
+// SD Transfer Commands
+#define SD_CMD_READ_SECTOR          0x01
+#define SD_CMD_WINDOW_ACK           0x02
+#define SD_CMD_TRANSFER_STATUS      0x03
+
+// SD Transfer Status Codes
+#define SD_STATUS_COMPLETE          0x00
+#define SD_STATUS_IN_PROGRESS       0x01
+#define SD_STATUS_SD_ERROR          0x10
+#define SD_STATUS_OUT_OF_RANGE      0x11
+#define SD_STATUS_BUSY              0x12
+#define SD_STATUS_CRC_ERROR         0x20
+#define SD_STATUS_UNKNOWN_ERROR     0xFF
+
 #endif /* INC_CAN_ID_MODULE_H_ */
