@@ -16,6 +16,19 @@
 #define EE_MAGIC2               2
 #define EE_PACK_CONTROLLER_ID   3
 
+// SD Card Frame Counter EEPROM addresses
+#define EE_FRAME_COUNTER_BASE   4      // Base address for frame counter
+#define EE_FRAME_COUNTER_L      4      // Low byte of frame counter
+#define EE_FRAME_COUNTER_M      5      // Middle byte of frame counter
+#define EE_FRAME_COUNTER_H      6      // High byte of frame counter
+#define EE_FRAME_CHECKSUM       7      // Checksum for frame counter
+
+// Frame counter wear leveling - use 8 slots
+#define EE_FRAME_SLOTS          8      // Number of wear leveling slots
+#define EE_FRAME_SLOT_SIZE      4      // Bytes per slot (3 bytes + checksum)
+#define EE_FRAME_SLOT_BASE      8      // Start of wear leveling area
+#define EE_FRAME_WRITES_PER_SLOT 10000 // Writes before rotating slot
+
 /*
  * Pack Controller Platform ID  8   //nucleo =0 , modbatt =1
 Pack Unique ID  32
