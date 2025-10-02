@@ -14,7 +14,7 @@
 #include "canfdspi_api.h"
 #include "string.h"
 #include "stdio.h"
-#include "can_frm_vcu.h"
+#include "../../protocols/can_frm_vcu.h"
 #include "eeprom_emul.h"
 
 

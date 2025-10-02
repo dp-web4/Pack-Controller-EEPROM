@@ -13,7 +13,7 @@
 #include "canfdspi_api.h"
 #include "string.h"
 #include "stdio.h"
-#include "can_frm_mod.h"
+#include "../../protocols/can_frm_mod.h"
 #include "vcu.h"
 #include "time.h"
 #include "eeprom_data.h"

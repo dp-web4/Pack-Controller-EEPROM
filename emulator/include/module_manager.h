@@ -22,7 +22,7 @@ extern "C" {
     #include <stdbool.h>
     #include "../../Core/Inc/bms.h"              // Module states and battery structures
     #include "../../protocols/CAN_ID_ALL.h"      // All CAN protocol definitions  
-    #include "../../Core/Inc/can_frm_mod.h"      // Module CAN frame structures
+    #include "../../protocols/can_frm_mod.h"      // Module CAN frame structures
 }
 
 namespace PackEmulator {
