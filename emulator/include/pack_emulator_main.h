@@ -19,6 +19,7 @@
 
 #include "module_manager.h"
 #include "can_interface.h"
+#include "can_id_module.h"
 #include <fstream>
 #include <vector>
 #include <ctime>
