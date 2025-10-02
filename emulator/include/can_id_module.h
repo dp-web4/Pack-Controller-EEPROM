@@ -35,9 +35,9 @@
 #define ID_MODULE_ALL_ISOLATE       0x51F
 
 // Frame transfer (bidirectional)
-#define ID_FRAME_TRANSFER_REQUEST   0x520  // Pack → Module: Request frame transfer
-#define ID_FRAME_TRANSFER_START     0x521  // Module → Pack: Start frame transfer
-#define ID_FRAME_TRANSFER_DATA      0x522  // Module → Pack: Frame data segment
-#define ID_FRAME_TRANSFER_END       0x523  // Module → Pack: End frame transfer
+#define ID_FRAME_TRANSFER_REQUEST   0x520  // Pack -> Module: Request frame transfer
+#define ID_FRAME_TRANSFER_START     0x521  // Module -> Pack: Start frame transfer
+#define ID_FRAME_TRANSFER_DATA      0x522  // Module -> Pack: Frame data segment
+#define ID_FRAME_TRANSFER_END       0x523  // Module -> Pack: End frame transfer
 
 #endif /* INC_CAN_ID_MODULE_H_ */
