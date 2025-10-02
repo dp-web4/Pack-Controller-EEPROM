@@ -12,13 +12,137 @@
  *   - modbatt-CAN tools
  *
  * All projects should reference this file via relative path from ai-agents/ root
+ *
+ * ========================================
+ * EXTENDED FRAME ADDRESSING SCHEME
+ * ========================================
+ *
+ * ALL MESSAGES USE 29-BIT EXTENDED CAN FRAMES (unless noted otherwise)
+ *
+ * Frame Format: [11-bit Base ID << 18] | [Module ID in bits 7:0]
+ *
+ * Module ID Assignments:
+ *   0x00 = Broadcast from Pack to all Modules
+ *   0x01-0x1F = Assigned Module IDs (1-31)
+ *   0xFF = Unregistered module announcement (Module to Pack only)
+ *
+ * Example Extended IDs:
+ *   Unregistered announcement:  (0x500 << 18) | 0xFF = 0x140000FF
+ *   Module 5 status:            (0x502 << 18) | 0x05 = 0x14080005
+ *   Broadcast state change:     (0x514 << 18) | 0x00 = 0x14500000
+ *
+ * Module MOB Configuration (ATmega64M1):
+ *
+ *   UNREGISTERED STATE:
+ *     MOB 0 (RX): Filter moduleID = 0xFF (receive unregistered-specific messages)
+ *     MOB 1 (TX): Transmit with moduleID = 0xFF (unregistered announcement)
+ *     MOB 2 (RX): Filter moduleID = 0x00 (receive broadcast messages) - ALWAYS ENABLED
+ *
+ *   REGISTERED STATE (e.g., assigned ID = 5):
+ *     MOB 0 (RX): Filter moduleID = 0x05 (receive my specific messages)
+ *     MOB 1 (TX): Transmit with moduleID = 0x05 (my responses)
+ *     MOB 2 (RX): Filter moduleID = 0x00 (receive broadcast messages) - ALWAYS ENABLED
+ *
+ *   ON DEREGISTRATION:
+ *     MOB 0 (RX): Reset filter to moduleID = 0xFF (back to unregistered)
+ *     MOB 1 (TX): Transmit with moduleID = 0xFF (back to unregistered)
+ *     MOB 2 (RX): Still enabled at moduleID = 0x00 (unchanged)
+ *
+ * Pack Controller Filtering (MCP2517FD - 32 filters available):
+ *   - Accept announcements: moduleID = 0xFF (unregistered modules)
+ *   - Accept module responses: moduleID = 0x01-0x1F (use mask to accept any)
+ *   - Transmit to unregistered: moduleID = 0xFF (registration, announce request)
+ *   - Transmit broadcasts: moduleID = 0x00 (max state, all deregister, all isolate)
+ *   - Transmit module-specific: moduleID = 0x01-0x1F
+ *
+ * ========================================
+ * PROTOCOL STATE MACHINE
+ * ========================================
+ *
+ * MODULE REGISTRATION FLOW:
+ *
+ * 1. POWER-ON / UNREGISTERED STATE:
+ *    - Module has no assigned ID
+ *    - MOB 0 = 0xFF (listen for unregistered-specific messages)
+ *    - MOB 1 = TX with 0xFF
+ *    - MOB 2 = 0x00 (listen for broadcasts - ALWAYS ENABLED)
+ *    - Module sends ANNOUNCEMENT with moduleID = 0xFF
+ *      Format: (0x500 << 18) | 0xFF
+ *      Contains: FW version, MFG ID, Part ID, Unique ID (32-bit)
+ *
+ * 2. PACK RECEIVES ANNOUNCEMENT:
+ *    - Pack sees announcement from moduleID = 0xFF
+ *    - Pack assigns module ID 1-31 based on available slots
+ *    - Pack sends REGISTRATION with moduleID = 0xFF
+ *      Format: (0x510 << 18) | 0xFF
+ *      Contains: Assigned ID, Unique ID echo (for verification)
+ *
+ * 3. MODULE RECEIVES REGISTRATION:
+ *    - Module receives on MOB 0 (listening to 0xFF)
+ *    - Module verifies Unique ID matches
+ *    - Module stores assigned ID (e.g., 5)
+ *    - Module updates MOB 0 filter from 0xFF to 0x05
+ *    - Module sets sg_bModuleRegistered = true
+ *    - MOB 2 remains at 0x00 (unchanged)
+ *
+ * 4. REGISTERED OPERATION:
+ *    - MOB 0 = 0x05 (listen for my specific messages)
+ *    - MOB 1 = TX with 0x05
+ *    - MOB 2 = 0x00 (listen for broadcasts)
+ *    - Module responds to:
+ *      * Module-specific: (base_id << 18) | 0x05
+ *      * Broadcasts: (base_id << 18) | 0x00
+ *    - Module does NOT hear:
+ *      * Other modules' responses (0x01-0x04, 0x06-0x1F)
+ *      * Unregistered traffic (0xFF)
+ *
+ * 5. DEREGISTRATION:
+ *    - Pack sends DEREGISTER with moduleID = 0x05
+ *      Format: (0x518 << 18) | 0x05
+ *    - OR pack sends ALL_DEREGISTER with moduleID = 0x00
+ *      Format: (0x51E << 18) | 0x00
+ *    - Module receives on MOB 0 (0x05) or MOB 2 (0x00)
+ *    - Module sets sg_bModuleRegistered = false
+ *    - Module updates MOB 0 filter from 0x05 to 0xFF
+ *    - Module clears assigned ID
+ *    - MOB 2 remains at 0x00 (unchanged)
+ *    - Module back to UNREGISTERED STATE
+ *
+ * BROADCAST MESSAGE TYPES:
+ *
+ * To Unregistered (0xFF):
+ *   - 0x510 REGISTRATION - Assign module ID to specific unique ID
+ *   - 0x51D ANNOUNCE_REQUEST - Request all unregistered modules announce
+ *
+ * To All Registered (0x00):
+ *   - 0x517 MAX_STATE - Set maximum allowed operational state
+ *   - 0x51E ALL_DEREGISTER - Deregister all modules
+ *   - 0x51F ALL_ISOLATE - Isolate all modules (open relays)
+ *
+ * FILTERING BENEFITS:
+ *
+ * - Modules don't hear each other's responses (reduced bus load)
+ * - Registered modules don't hear registration traffic
+ * - Unregistered modules don't hear operational commands
+ * - Pack can selectively address individual modules
+ * - Clear separation of unregistered/registered/broadcast traffic
+ *
  **************************************************************************************************************/
 #ifndef INC_CAN_ID_ALL_H_
 #define INC_CAN_ID_ALL_H_
 
 // ========================================
+// MODULE ID CONSTANTS
+// ========================================
+#define CAN_MODULE_ID_BROADCAST     0x00  // Pack -> All Modules broadcast
+#define CAN_MODULE_ID_MIN           0x01  // First assignable module ID
+#define CAN_MODULE_ID_MAX           0x1F  // Last assignable module ID (31 modules)
+#define CAN_MODULE_ID_UNREGISTERED  0xFF  // Unregistered module announcement
+
+// ========================================
 // BMS DIAGNOSTIC MESSAGES (0x220-0x228)
 // VCU <-> Pack Controller Diagnostic Interface
+// NOTE: May use standard 11-bit frames (VCU interface)
 // ========================================
 
 #define ID_BMS_STATUS               0x220
@@ -35,15 +159,16 @@
 // SD CARD TRANSFER MESSAGES (0x3F0-0x3F3)
 // Pack Controller <-> Module Controller
 // High-speed bulk transfer protocol
+// Uses Extended Frames with Module ID
 // ========================================
 
 // Pack Controller to Module Controller
-#define ID_SD_SECTOR_REQUEST        0x3F0  // Base ID, add module ID
-#define ID_SD_WINDOW_ACK            0x3F2  // Base ID, add module ID
+#define ID_SD_SECTOR_REQUEST        0x3F0  // Base ID, module ID in lower bits
+#define ID_SD_WINDOW_ACK            0x3F2  // Base ID, module ID in lower bits
 
 // Module Controller to Pack Controller
-#define ID_SD_DATA_CHUNK            0x3F1  // Base ID for extended frames
-#define ID_SD_TRANSFER_STATUS       0x3F3  // Base ID, add module ID
+#define ID_SD_DATA_CHUNK            0x3F1  // Base ID, module ID in lower bits
+#define ID_SD_TRANSFER_STATUS       0x3F3  // Base ID, module ID in lower bits
 
 // SD Card Transfer Constants
 #define SD_SECTOR_SIZE              512
@@ -70,6 +195,7 @@
 // ========================================
 // VCU <-> PACK CONTROLLER (0x400-0x44F)
 // BMS/VCU Standard Interface
+// NOTE: May use standard 11-bit frames (VCU interface)
 // ========================================
 
 // VCU to Pack Controller
@@ -118,10 +244,14 @@
 // ========================================
 // PACK <-> MODULE CONTROLLER (0x500-0x52F)
 // Module Management Protocol
+// ALL USE EXTENDED FRAMES with Module ID
 // ========================================
 
 // Module Controller to Pack Controller
-#define ID_MODULE_ANNOUNCEMENT      0x500
+// Extended Frame: (Base ID << 18) | Module ID
+// Unregistered uses Module ID = 0xFF
+// Registered uses Module ID = 0x01-0x1F
+#define ID_MODULE_ANNOUNCEMENT      0x500  // Module ID = 0xFF when unregistered
 #define ID_MODULE_HARDWARE          0x501
 #define ID_MODULE_STATUS_1          0x502
 #define ID_MODULE_STATUS_2          0x503
@@ -133,20 +263,25 @@
 #define ID_MODULE_STATUS_4          0x509
 
 // Pack Controller to Module Controller
-#define ID_MODULE_REGISTRATION      0x510
-#define ID_MODULE_HARDWARE_REQUEST  0x511
-#define ID_MODULE_STATUS_REQUEST    0x512
-#define ID_MODULE_STATE_CHANGE      0x514
-#define ID_MODULE_DETAIL_REQUEST    0x515
-#define ID_MODULE_SET_TIME          0x516
-#define ID_MODULE_MAX_STATE         0x517
-#define ID_MODULE_DEREGISTER        0x518
-#define ID_MODULE_ANNOUNCE_REQUEST  0x51D
-#define ID_MODULE_ALL_DEREGISTER    0x51E
-#define ID_MODULE_ALL_ISOLATE       0x51F
+// Extended Frame: (Base ID << 18) | Module ID
+// Unregistered-only uses Module ID = 0xFF
+// Broadcast uses Module ID = 0x00 (all registered modules)
+// Module-specific uses Module ID = 0x01-0x1F
+#define ID_MODULE_REGISTRATION      0x510  // Module ID = 0xFF (unregistered modules only)
+#define ID_MODULE_HARDWARE_REQUEST  0x511  // Module ID = 0x01-0x1F (specific module)
+#define ID_MODULE_STATUS_REQUEST    0x512  // Module ID = 0x01-0x1F (specific module)
+#define ID_MODULE_STATE_CHANGE      0x514  // Module ID = 0x01-0x1F (specific module)
+#define ID_MODULE_DETAIL_REQUEST    0x515  // Module ID = 0x01-0x1F (specific module)
+#define ID_MODULE_SET_TIME          0x516  // Module ID = 0x01-0x1F (specific module)
+#define ID_MODULE_MAX_STATE         0x517  // Module ID = 0x00 (broadcast - all registered modules)
+#define ID_MODULE_DEREGISTER        0x518  // Module ID = 0x01-0x1F (specific module)
+#define ID_MODULE_ANNOUNCE_REQUEST  0x51D  // Module ID = 0xFF (unregistered modules only)
+#define ID_MODULE_ALL_DEREGISTER    0x51E  // Module ID = 0x00 (broadcast - all registered modules)
+#define ID_MODULE_ALL_ISOLATE       0x51F  // Module ID = 0x00 (broadcast - all registered modules)
 
 // Frame Transfer Protocol (Bidirectional)
 // Used to transfer EEPROM frames from Module to Pack for diagnostic/logging
+// Extended Frame: (Base ID << 18) | Module ID
 #define ID_FRAME_TRANSFER_REQUEST   0x520  // Pack -> Module: Request frame transfer
 #define ID_FRAME_TRANSFER_START     0x521  // Module -> Pack: Start frame transfer
 #define ID_FRAME_TRANSFER_DATA      0x522  // Module -> Pack: Frame data segment
