@@ -2316,7 +2316,8 @@ void __fastcall TMainForm::GetFrameButtonClick(TObject *Sender) {
 }
 
 //---------------------------------------------------------------------------
-void TMainForm::SendFrameTransferRequest(uint32_t frameNumber) {
+void TMainForm::SendFrameTransferRequest(uint32_t frameNumber)
+{
     uint8_t data[8];
     data[0] = selectedModuleId;  // Target module
     *(uint32_t*)&data[1] = frameNumber;  // Frame counter (little-endian)
