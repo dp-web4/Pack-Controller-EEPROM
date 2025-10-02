@@ -1118,7 +1118,8 @@ void MCU_DeRegisterModule(uint8_t moduleId){
     CANFRM_MODULE_DEREGISTER deRegistration;
 
     // configure the packet - format like other module-specific messages
-    deRegistration.moduleId = moduleId;
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // deRegistration.moduleId = moduleId;
     deRegistration.controllerId = pack.id;
 
     // Clear transmit object
@@ -1307,7 +1308,8 @@ void MCU_RequestHardware(uint8_t moduleId){
     module[moduleIndex].hardwarePending = true;
 
     // set up the message
-    hardwareRequest.moduleId = moduleId;
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // hardwareRequest.moduleId = moduleId;
 
      // clear bit fields
     txObj.word[0] = 0;                              // Configure transmit message
@@ -1447,7 +1449,8 @@ void MCU_RequestModuleStatus(uint8_t moduleId){
     module[moduleIndex].statusMessagesReceived = 0;  // Clear previous status bits
 
     // request cell detail packet for cell 0
-    statusRequest.moduleId = moduleId;
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // statusRequest.moduleId = moduleId;
 
      // clear bit fields
     txObj.word[0] = 0;                              // Configure transmit message
@@ -1836,7 +1839,8 @@ void MCU_RequestCellDetail(uint8_t moduleId){
   }
 
   // request cell detail packet for cell 0
-  detailRequest.moduleId = moduleId;
+  // Hardware MOB filtering now handles routing - moduleId in data is redundant
+  // detailRequest.moduleId = moduleId;
   detailRequest.cellId = 0;
 
    // clear bit fields
@@ -1875,7 +1879,8 @@ void MCU_TransmitState(uint8_t moduleId, moduleState state){
   uint8_t index;
 
   // set up the frame
-  stateChange.moduleId = moduleId;
+  // Hardware MOB filtering now handles routing - moduleId in data is redundant
+  // stateChange.moduleId = moduleId;
   stateChange.state = state;
   stateChange.UNUSED_12_15 = 0;
   stateChange.hvBusVoltage = pack.vcuHvBusVoltage;
@@ -2006,7 +2011,8 @@ void MCU_ProcessCellDetail(void){
   // request the next cell detail packet
   if (cellDetail.cellId < (cellDetail.cellCount -1)){
 
-    detailRequest.moduleId = rxObj.bF.id.EID;  // Must set module ID!
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // detailRequest.moduleId = rxObj.bF.id.EID;
     detailRequest.cellId = cellDetail.cellId +1;
 
      // clear bit fields
