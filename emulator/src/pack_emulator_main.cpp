@@ -1787,11 +1787,12 @@ void TMainForm::SendModuleStatusRequest(uint8_t moduleId) {
     
     // Send status request to specific module (0x512)
     uint8_t data[8] = {0};
-    data[0] = moduleId;  // Module ID to request status from
-    
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // data[0] = moduleId;
+
     // For extended frames targeting a specific module
     uint32_t extendedId = ((uint32_t)ID_MODULE_STATUS_REQUEST << 18) | moduleId;
-    
+
     if (canInterface->SendMessage(extendedId, data, 1, true)) {
         // Log status requests to debug polling
         LogMessage("→ 0x512 [Status Request] to module " + IntToStr(moduleId));
@@ -2053,8 +2054,9 @@ void TMainForm::SendStatusRequest() {
     
     // Send MODULE_STATUS_REQUEST (0x512) to specific module
     uint8_t data[1] = {0};
-    data[0] = 0x01;  // Request all status messages
-    
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // data[0] = 0x01;  // Request all status messages
+
     uint32_t extendedId = ((uint32_t)ID_MODULE_STATUS_REQUEST << 18) | moduleId;
     
     if (canInterface->SendMessage(extendedId, data, 1, true)) {

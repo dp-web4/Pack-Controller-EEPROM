@@ -200,11 +200,12 @@ bool CANInterface::SendDetailRequest(uint8_t moduleId, uint8_t cellId) {
     
     // Build extended CAN ID
     uint32_t extendedId = ((uint32_t)ID_MODULE_DETAIL_REQUEST << 18) | moduleId;
-    
-    // Data format: Byte 0 = module ID, Byte 1 = cell ID, Byte 2 = unused
+
+    // Data format: Byte 0 = module ID (redundant), Byte 1 = cell ID, Byte 2 = unused
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
     uint8_t data[3] = {0};
-    data[0] = moduleId;
-    data[1] = cellId;
+    // data[0] = moduleId;  // Now redundant - module ID is in extended frame bits 0-7
+    data[1] = cellId;  // cellId in byte 1
     data[2] = 0;  // Unused
     
     // Log the actual CAN frame being sent (for debugging)
