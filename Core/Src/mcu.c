@@ -1094,7 +1094,7 @@ void MCU_RegisterModule(void){
   memcpy(txd, &registration, sizeof(registration));
 
   txObj.bF.id.SID = ID_MODULE_REGISTRATION;        // Standard ID
-  txObj.bF.id.EID = module[moduleIndex].moduleId;  // Extended ID
+  txObj.bF.id.EID = 0xFF;                          // Extended ID - send to unregistered modules
 
   txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
   txObj.bF.ctrl.DLC = CAN_DLC_8;                  // 8 bytes to transmit
@@ -1226,10 +1226,10 @@ void MCU_RequestModuleAnnouncement(void){
   
   // copy announcement request packet to txd structure
   memcpy(txd, &announceRequest, sizeof(announceRequest));
-  
+
   txObj.bF.id.SID = ID_MODULE_ANNOUNCE_REQUEST;   // Standard ID
-  txObj.bF.id.EID = 0;                            // Extended ID - broadcast to all
-  
+  txObj.bF.id.EID = 0xFF;                         // Extended ID - send to unregistered modules
+
   txObj.bF.ctrl.BRS = 0;                          // Bit Rate Switch - use DBR when set, NBR when cleared
   txObj.bF.ctrl.DLC = CAN_DLC_1;                  // 1 byte to transmit
   txObj.bF.ctrl.FDF = 0;                          // Frame Data Format - CAN FD when set, CAN 2.0 when cleared
@@ -1932,7 +1932,7 @@ void MCU_TransmitMaxState(moduleState state){
   memcpy(txd, &maxState, sizeof(maxState));
 
   txObj.bF.id.SID = ID_MODULE_MAX_STATE;         // Standard ID
-  txObj.bF.id.EID = pack.id;                     // Extended ID = controller ID
+  txObj.bF.id.EID = 0x00;                        // Extended ID - broadcast to registered modules
 
   txObj.bF.ctrl.BRS = 0;                         // Bit Rate Switch - use DBR when set, NBR when cleared
   txObj.bF.ctrl.DLC = CAN_DLC_1;                 // 1 bytes to transmit
