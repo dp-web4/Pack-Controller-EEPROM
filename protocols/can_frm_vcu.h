@@ -7,6 +7,24 @@
  **************************************************************************************************************/
 #ifndef INC_CAN_FRM_VCU_H_
 #define INC_CAN_FRM_VCU_H_
+
+
+#define VCU_CURRENT_BASE            -1600       // amps
+#define VCU_CURRENT_FACTOR          0.05        // amps
+#define VCU_VOLTAGE_BASE            0           // volts
+#define VCU_VOLTAGE_FACTOR          0.05        // volts
+#define VCU_TEMPERATURE_BASE        -273        // degrees C
+#define VCU_TEMPERATURE_FACTOR      0.03125     // degrees C
+#define VCU_CELL_VOLTAGE_BASE       0           // volts
+#define VCU_CELL_VOLTAGE_FACTOR     0.001       // volts
+#define VCU_SOC_PERCENTAGE_BASE     0           // %
+#define VCU_SOC_PERCENTAGE_FACTOR   0.0015625   // %
+#define VCU_SOH_PERCENTAGE_BASE     0           // %
+#define VCU_SOH_PERCENTAGE_FACTOR   0.4         // %
+#define VCU_ISOLATION_FACTOR        0.001       // Ohms/Volt
+#define VCU_HV_FACTOR               0.015       // volts
+#define VCU_HV_BASE                 0           // volts
+
 /*
                                           =====================
                                           CAN FRAME STRUCTURES
