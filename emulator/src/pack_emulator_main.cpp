@@ -2083,22 +2083,22 @@ void TMainForm::SendStatusRequest() {
 void TMainForm::SendRegistrationAck() {
     uint8_t moduleId = messageFlags.registrationModuleId;
     uint32_t uniqueId = messageFlags.registrationUniqueId;
-    
-    // Send MODULE_REGISTRATION (0x510) ACK
+
+    // Send MODULE_REGISTRATION (0x510) ACK to unregistered modules (0xFF)
     uint8_t regData[8] = {0};
     regData[0] = 0x01;  // ACK
     regData[1] = moduleId;  // Assigned module ID
-    
+
     // Copy unique ID (little endian)
     regData[4] = (uint8_t)(uniqueId & 0xFF);
     regData[5] = (uint8_t)((uniqueId >> 8) & 0xFF);
     regData[6] = (uint8_t)((uniqueId >> 16) & 0xFF);
     regData[7] = (uint8_t)((uniqueId >> 24) & 0xFF);
-    
-    uint32_t regExtId = ((uint32_t)ID_MODULE_REGISTRATION << 18) | moduleId;
+
+    uint32_t regExtId = ((uint32_t)ID_MODULE_REGISTRATION << 18) | 0xFF;
     if (canInterface->SendMessage(regExtId, regData, 8, true)) {
         LogMessage("→ 0x510 [Registration ACK] Module " + IntToStr(moduleId) +
-                  " ID: 0x" + IntToHex((int)uniqueId, 8));
+                  " ID: 0x" + IntToHex((int)uniqueId, 8) + " (sent to 0xFF)");
     }
 }
 
@@ -2132,13 +2132,13 @@ void TMainForm::SendTimeSync() {
 }
 
 void TMainForm::SendDiscoveryRequest() {
-    // Send MODULE_ANNOUNCE_REQUEST (0x51D)
+    // Send MODULE_ANNOUNCE_REQUEST (0x51D) to unregistered modules (0xFF)
     uint8_t data[8] = {0};
     data[0] = 0x01;  // Request announcement from all modules
-    
-    uint32_t announceExtId = ((uint32_t)ID_MODULE_ANNOUNCE_REQUEST << 18) | 0;
+
+    uint32_t announceExtId = ((uint32_t)ID_MODULE_ANNOUNCE_REQUEST << 18) | 0xFF;
     if (canInterface->SendMessage(announceExtId, data, 8, true)) {
-        LogMessage("→ 0x51D [Discovery Request] Broadcasting to all modules");
+        LogMessage("→ 0x51D [Discovery Request] Broadcasting to unregistered modules (0xFF)");
     }
 }
 
