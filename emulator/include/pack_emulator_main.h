@@ -86,6 +86,9 @@ __published:	// IDE-managed Components
     // TChart *CellVoltageChart;  // Commented out - requires TeeChart component
     TCheckBox *ExportCheck;
     TLabel *ExportFileLabel;
+    TButton *GetFrameButton;
+    TEdit *FrameNumberEdit;
+    TLabel *FrameNumberLabel;
     
     // History tab controls
     TMemo *HistoryMemo;
@@ -160,6 +163,7 @@ __published:	// IDE-managed Components
     void __fastcall FormDestroy(TObject *Sender);
     void __fastcall DetailsPageControlChange(TObject *Sender);
     void __fastcall ExportCheckClick(TObject *Sender);
+    void __fastcall GetFrameButtonClick(TObject *Sender);
     
 private:	// User declarations
     PackEmulator::ModuleManager* moduleManager;
@@ -211,10 +215,31 @@ private:	// User declarations
     uint8_t exportExpectedCount;  // Expected cells for current export
     uint8_t exportReceivedCount;  // Cells that actually reported
 
+    // Frame transfer state
+    enum FrameTransferState {
+        FRAME_IDLE,
+        FRAME_WAITING_START,
+        FRAME_RECEIVING_DATA,
+        FRAME_COMPLETE
+    };
+    FrameTransferState frameTransferState;
+    uint8_t frameBuffer[1024];  // Buffer for received frame
+    uint16_t frameSegmentCount;  // Number of segments received
+    uint32_t frameCounter;  // Frame counter from START message
+    uint32_t frameCRC;  // CRC from END message
+
     // CSV export methods
     void StartCSVExport();
     void StopCSVExport();
     void WriteCSVRow();
+
+    // Frame transfer methods
+    void SendFrameTransferRequest(uint32_t frameNumber);
+    void ProcessFrameTransferStart(const uint8_t* data);
+    void ProcessFrameTransferData(const uint8_t* data);
+    void ProcessFrameTransferEnd(const uint8_t* data);
+    void WriteFrameToCSV();
+    uint32_t CalculateCRC32(const uint8_t* data, uint16_t length);
 
     // UI update functions
     void UpdateModuleList();

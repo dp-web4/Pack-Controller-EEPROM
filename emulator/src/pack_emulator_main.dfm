@@ -442,6 +442,30 @@ object MainForm: TMainForm
           Height = 13
           Caption = ''
         end
+        object GetFrameButton: TButton
+          Left = 376
+          Top = 60
+          Width = 100
+          Height = 25
+          Caption = 'Get Frame'
+          TabOrder = 2
+          OnClick = GetFrameButtonClick
+        end
+        object FrameNumberEdit: TEdit
+          Left = 482
+          Top = 60
+          Width = 100
+          Height = 21
+          TabOrder = 3
+          Text = '0xFFFFFFFF'
+        end
+        object FrameNumberLabel: TLabel
+          Left = 482
+          Top = 86
+          Width = 100
+          Height = 13
+          Caption = 'Frame # (or current)'
+        end
       end
       object HistoryTab: TTabSheet
         Caption = 'History'

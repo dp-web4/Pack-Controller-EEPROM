@@ -95,6 +95,13 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
         ExportCheck->Checked = false;  // Default to off
     }
 
+    // Initialize frame transfer state
+    frameTransferState = FRAME_IDLE;
+    frameSegmentCount = 0;
+    frameCounter = 0;
+    frameCRC = 0;
+    memset(frameBuffer, 0, sizeof(frameBuffer));
+
     LogMessage("Pack Controller Emulator initialized");
 }
 
@@ -1028,6 +1035,15 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         case ID_MODULE_CELL_TEMP:
             description = " [Cell Temp]";
             break;
+        case ID_FRAME_TRANSFER_START:
+            description = " [Frame Start]";
+            break;
+        case ID_FRAME_TRANSFER_DATA:
+            description = " [Frame Data]";
+            break;
+        case ID_FRAME_TRANSFER_END:
+            description = " [Frame End]";
+            break;
         default:
             description = "";
     }
@@ -1214,6 +1230,16 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     // Check for cell comm status messages
     else if (canId == ID_MODULE_CELL_COMM_STATUS1) {
         ProcessModuleCellCommStatus(moduleIdFromExtended, msg.data);
+    }
+    // Check for frame transfer messages
+    else if (canId == ID_FRAME_TRANSFER_START) {
+        ProcessFrameTransferStart(msg.data);
+    }
+    else if (canId == ID_FRAME_TRANSFER_DATA) {
+        ProcessFrameTransferData(msg.data);
+    }
+    else if (canId == ID_FRAME_TRANSFER_END) {
+        ProcessFrameTransferEnd(msg.data);
     }
 }
 
@@ -2255,6 +2281,190 @@ void TMainForm::WriteCSVRow() {
     csvFile->flush();  // Ensure data is written immediately
 
     LogMessage("CSV row written for " + IntToStr(exportReceivedCount) + " cells");
+}
+
+//---------------------------------------------------------------------------
+// Frame Transfer Methods
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::GetFrameButtonClick(TObject *Sender) {
+    (void)Sender;
+
+    if (!isConnected) {
+        ShowError("Not connected to CAN bus");
+        return;
+    }
+
+    if (selectedModuleId == 0) {
+        ShowError("No module selected");
+        return;
+    }
+
+    // Parse frame number from edit box
+    String frameNumStr = FrameNumberEdit->Text.Trim();
+    uint32_t frameNumber;
+
+    if (frameNumStr.Pos("0x") == 1 || frameNumStr.Pos("0X") == 1) {
+        // Hex format
+        frameNumber = StrToInt("$" + frameNumStr.SubString(3, frameNumStr.Length() - 2));
+    } else {
+        // Decimal format
+        frameNumber = StrToInt(frameNumStr);
+    }
+
+    LogMessage("Requesting frame " + IntToStr(frameNumber) + " from module " + IntToStr(selectedModuleId));
+    SendFrameTransferRequest(frameNumber);
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::SendFrameTransferRequest(uint32_t frameNumber) {
+    uint8_t data[8];
+    data[0] = selectedModuleId;  // Target module
+    *(uint32_t*)&data[1] = frameNumber;  // Frame counter (little-endian)
+    data[5] = 0;
+    data[6] = 0;
+    data[7] = 0;
+
+    PackEmulator::CANMessage msg;
+    msg.id = ID_FRAME_TRANSFER_REQUEST;
+    msg.length = 8;
+    memcpy(msg.data, data, 8);
+
+    if (canInterface->SendMessage(msg)) {
+        frameTransferState = FRAME_WAITING_START;
+        frameSegmentCount = 0;
+        memset(frameBuffer, 0, sizeof(frameBuffer));
+        LogMessage("Frame transfer request sent");
+    } else {
+        ShowError("Failed to send frame transfer request");
+    }
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::ProcessFrameTransferStart(const uint8_t* data) {
+    if (frameTransferState != FRAME_WAITING_START) {
+        LogMessage("Warning: Received frame start but not waiting for it");
+        return;
+    }
+
+    frameCounter = *(uint32_t*)&data[0];
+    uint16_t totalMessages = *(uint16_t*)&data[4];
+
+    LogMessage("Frame transfer started: counter=" + IntToStr(frameCounter) +
+               ", total messages=" + IntToStr(totalMessages));
+
+    frameTransferState = FRAME_RECEIVING_DATA;
+    frameSegmentCount = 0;
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::ProcessFrameTransferData(const uint8_t* data) {
+    if (frameTransferState != FRAME_RECEIVING_DATA) {
+        LogMessage("Warning: Received frame data but not in receiving state");
+        return;
+    }
+
+    if (frameSegmentCount >= 128) {
+        LogMessage("Error: Too many data segments received");
+        frameTransferState = FRAME_IDLE;
+        return;
+    }
+
+    // Copy 8 bytes to buffer
+    uint16_t offset = frameSegmentCount * 8;
+    memcpy(&frameBuffer[offset], data, 8);
+    frameSegmentCount++;
+
+    // Log progress every 16 segments
+    if (frameSegmentCount % 16 == 0) {
+        LogMessage("Received " + IntToStr(frameSegmentCount) + "/128 segments");
+    }
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::ProcessFrameTransferEnd(const uint8_t* data) {
+    if (frameTransferState != FRAME_RECEIVING_DATA) {
+        LogMessage("Warning: Received frame end but not in receiving state");
+        return;
+    }
+
+    frameCRC = *(uint32_t*)&data[0];
+
+    // Calculate CRC32 of received frame
+    uint32_t calculatedCRC = CalculateCRC32(frameBuffer, 1024);
+
+    if (calculatedCRC == frameCRC) {
+        LogMessage("Frame transfer complete: CRC OK, " + IntToStr(frameSegmentCount) + " segments received");
+        frameTransferState = FRAME_COMPLETE;
+
+        // Write to CSV
+        WriteFrameToCSV();
+    } else {
+        LogMessage("Frame transfer FAILED: CRC mismatch (expected " +
+                   IntToHex(frameCRC, 8) + ", got " + IntToHex(calculatedCRC, 8) + ")");
+        frameTransferState = FRAME_IDLE;
+    }
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::WriteFrameToCSV() {
+    if (!SaveDialog->Execute()) {
+        LogMessage("Frame export cancelled");
+        frameTransferState = FRAME_IDLE;
+        return;
+    }
+
+    String filename = SaveDialog->FileName;
+    std::ofstream file(filename.c_str());
+
+    if (!file.is_open()) {
+        ShowError("Failed to open file for writing");
+        frameTransferState = FRAME_IDLE;
+        return;
+    }
+
+    // Write header
+    file << "Frame Counter," << frameCounter << std::endl;
+    file << "Module ID," << (int)selectedModuleId << std::endl;
+    file << "Segments Received," << frameSegmentCount << std::endl;
+    file << "CRC32,0x" << std::hex << std::setw(8) << std::setfill('0') << frameCRC << std::dec << std::endl;
+    file << std::endl;
+
+    // Write raw frame data as hex dump
+    file << "Offset,Hex,ASCII" << std::endl;
+    for (int i = 0; i < 1024; i += 16) {
+        file << "0x" << std::hex << std::setw(4) << std::setfill('0') << i << std::dec << ",";
+
+        // Hex bytes
+        for (int j = 0; j < 16 && (i + j) < 1024; j++) {
+            file << std::hex << std::setw(2) << std::setfill('0') << (int)frameBuffer[i + j] << " ";
+        }
+        file << ",";
+
+        // ASCII representation
+        for (int j = 0; j < 16 && (i + j) < 1024; j++) {
+            char c = frameBuffer[i + j];
+            file << (c >= 32 && c < 127 ? c : '.');
+        }
+        file << std::endl;
+    }
+
+    file.close();
+    LogMessage("Frame exported to " + filename);
+    frameTransferState = FRAME_IDLE;
+}
+
+//---------------------------------------------------------------------------
+uint32_t TMainForm::CalculateCRC32(const uint8_t* data, uint16_t length) {
+    uint32_t crc = 0xFFFFFFFF;
+
+    for (uint16_t i = 0; i < length; i++) {
+        crc ^= data[i];
+        for (uint8_t j = 0; j < 8; j++) {
+            crc = (crc >> 1) ^ (0xEDB88320 & -(crc & 1));
+        }
+    }
+
+    return ~crc;
 }
 
 //---------------------------------------------------------------------------
