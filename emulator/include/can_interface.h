@@ -20,8 +20,7 @@
 
 // Include CAN ID definitions from STM32 firmware
 extern "C" {
-    #include "../../Core/Inc/can_id_module.h"    // Module CAN message IDs
-    #include "../../Core/Inc/can_id_bms_vcu.h"   // VCU CAN message IDs
+    #include "../../protocols/CAN_ID_ALL.h"      // All CAN protocol definitions
 }
 
 namespace PackEmulator {

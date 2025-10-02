@@ -21,8 +21,7 @@ extern "C" {
     #include <stdint.h>
     #include <stdbool.h>
     #include "../../Core/Inc/bms.h"              // Module states and battery structures
-    #include "../../Core/Inc/can_id_module.h"    // Module CAN message IDs
-    #include "../../Core/Inc/can_id_bms_vcu.h"   // VCU CAN message IDs  
+    #include "../../protocols/CAN_ID_ALL.h"      // All CAN protocol definitions  
     #include "../../Core/Inc/can_frm_mod.h"      // Module CAN frame structures
 }
 

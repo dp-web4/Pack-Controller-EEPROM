@@ -19,7 +19,7 @@
 
 #include "module_manager.h"
 #include "can_interface.h"
-#include "can_id_module.h"
+#include "../../protocols/CAN_ID_ALL.h"
 #include <fstream>
 #include <vector>
 #include <ctime>

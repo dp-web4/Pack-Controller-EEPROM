@@ -7,7 +7,7 @@
 #include <string.h>
 #include <stdbool.h>
 #include "main.h"
-#include "can_id_module.h"  // Include BEFORE debug.h to get CAN message IDs
+#include "../../protocols/CAN_ID_ALL.h"  // Include BEFORE debug.h to get CAN message IDs
 #include "can_frm_mod.h"    // Include for CAN frame structures
 #include "debug.h"
 #include "mcu.h"

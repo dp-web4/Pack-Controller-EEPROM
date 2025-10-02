@@ -3,8 +3,6 @@
 #pragma hdrstop
 
 #include "pack_emulator_main.h"
-#include "../include/can_id_module.h"
-#include "../include/can_id_bms_vcu.h"
 #include <sstream>
 #include <iomanip>
 #include <windows.h>
@@ -2311,7 +2309,7 @@ void __fastcall TMainForm::GetFrameButtonClick(TObject *Sender) {
         frameNumber = StrToInt(frameNumStr);
     }
 
-    LogMessage("Requesting frame " + IntToStr(frameNumber) + " from module " + IntToStr(selectedModuleId));
+    LogMessage("Requesting frame " + IntToStr((int)frameNumber) + " from module " + IntToStr(selectedModuleId));
     SendFrameTransferRequest(frameNumber);
 }
 
@@ -2350,8 +2348,8 @@ void TMainForm::ProcessFrameTransferStart(const uint8_t* data) {
     frameCounter = *(uint32_t*)&data[0];
     uint16_t totalMessages = *(uint16_t*)&data[4];
 
-    LogMessage("Frame transfer started: counter=" + IntToStr(frameCounter) +
-               ", total messages=" + IntToStr(totalMessages));
+    LogMessage("Frame transfer started: counter=" + IntToStr((int)frameCounter) +
+               ", total messages=" + IntToStr((int)totalMessages));
 
     frameTransferState = FRAME_RECEIVING_DATA;
     frameSegmentCount = 0;

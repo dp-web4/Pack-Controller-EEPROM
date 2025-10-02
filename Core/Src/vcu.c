@@ -9,7 +9,7 @@
 #include "vcu.h"
 #include "main.h"
 #include "bms.h"
-#include <can_id_bms_vcu.h>
+#include "../../protocols/CAN_ID_ALL.h"
 #include "mcu.h"
 #include "canfdspi_api.h"
 #include "string.h"

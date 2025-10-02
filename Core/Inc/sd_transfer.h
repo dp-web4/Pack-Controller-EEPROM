@@ -10,7 +10,7 @@
 
 #include <stdint.h>
 #include <stdbool.h>
-#include "can_id_module.h"
+#include "../../protocols/CAN_ID_ALL.h"
 
 // Transfer states
 typedef enum {
