@@ -2318,23 +2318,25 @@ void __fastcall TMainForm::GetFrameButtonClick(TObject *Sender) {
 //---------------------------------------------------------------------------
 void TMainForm::SendFrameTransferRequest(uint32_t frameNumber)
 {
+    // Send FRAME_TRANSFER_REQUEST (0x520) as extended frame with module ID
     uint8_t data[8];
-    data[0] = selectedModuleId;  // Target module
-    *(uint32_t*)&data[1] = frameNumber;  // Frame counter (little-endian)
+    // Hardware MOB filtering now handles routing - moduleId in data is redundant
+    // data[0] = selectedModuleId;  // Target module
+    *(uint32_t*)&data[0] = frameNumber;  // Frame counter (little-endian) - now in bytes 0-3
+    data[4] = 0;
     data[5] = 0;
     data[6] = 0;
     data[7] = 0;
 
-    PackEmulator::CANMessage msg;
-    msg.id = ID_FRAME_TRANSFER_REQUEST;
-    msg.length = 8;
-    memcpy(msg.data, data, 8);
+    // Build extended CAN ID: (Base ID << 18) | Module ID
+    uint32_t extendedId = ((uint32_t)ID_FRAME_TRANSFER_REQUEST << 18) | selectedModuleId;
 
-    if (canInterface->SendMessage(msg)) {
+    if (canInterface->SendMessage(extendedId, data, 8, true)) {
         frameTransferState = FRAME_WAITING_START;
         frameSegmentCount = 0;
         memset(frameBuffer, 0, sizeof(frameBuffer));
-        LogMessage("Frame transfer request sent");
+        LogMessage("→ 0x520 [Frame Transfer Request] Frame " + IntToHex((int)frameNumber, 8) +
+                  " from module " + IntToStr(selectedModuleId));
     } else {
         ShowError("Failed to send frame transfer request");
     }
