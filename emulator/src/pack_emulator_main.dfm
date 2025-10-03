@@ -459,12 +459,39 @@ object MainForm: TMainForm
           TabOrder = 3
           Text = '0xFFFFFFFF'
         end
+        object FrameNumberDecButton: TButton
+          Left = 588
+          Top = 60
+          Width = 20
+          Height = 21
+          Caption = '<'
+          TabOrder = 4
+          OnClick = FrameNumberDecButtonClick
+        end
+        object FrameNumberIncButton: TButton
+          Left = 608
+          Top = 60
+          Width = 20
+          Height = 21
+          Caption = '>'
+          TabOrder = 5
+          OnClick = FrameNumberIncButtonClick
+        end
         object FrameNumberLabel: TLabel
           Left = 482
           Top = 86
-          Width = 100
+          Width = 40
           Height = 13
-          Caption = 'Frame # (or current)'
+          Caption = 'Frame #'
+        end
+        object FrameNumberCurrentButton: TButton
+          Left = 528
+          Top = 82
+          Width = 50
+          Height = 21
+          Caption = 'Current'
+          TabOrder = 6
+          OnClick = FrameNumberCurrentButtonClick
         end
         object FrameBytesLabel: TLabel
           Left = 376

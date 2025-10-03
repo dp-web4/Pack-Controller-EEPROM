@@ -2334,6 +2334,84 @@ void __fastcall TMainForm::GetFrameButtonClick(TObject *Sender) {
 }
 
 //---------------------------------------------------------------------------
+void __fastcall TMainForm::FrameNumberDecButtonClick(TObject *Sender) {
+    (void)Sender;
+
+    if (!FrameNumberEdit) return;
+
+    // Parse current value
+    String frameNumStr = FrameNumberEdit->Text.Trim();
+    uint32_t frameNumber;
+
+    try {
+        if (frameNumStr.Pos("0x") == 1 || frameNumStr.Pos("0X") == 1) {
+            // Hex format
+            frameNumber = StrToInt("$" + frameNumStr.SubString(3, frameNumStr.Length() - 2));
+        } else {
+            // Decimal format
+            frameNumber = StrToInt(frameNumStr);
+        }
+
+        // Decrement (with wraparound)
+        if (frameNumber > 0) {
+            frameNumber--;
+        } else {
+            frameNumber = 0xFFFFFFFF;
+        }
+
+        // Update field
+        FrameNumberEdit->Text = "0x" + IntToHex((int)frameNumber, 8);
+    } catch (...) {
+        // If parsing fails, reset to current frame
+        FrameNumberEdit->Text = "0xFFFFFFFF";
+    }
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::FrameNumberIncButtonClick(TObject *Sender) {
+    (void)Sender;
+
+    if (!FrameNumberEdit) return;
+
+    // Parse current value
+    String frameNumStr = FrameNumberEdit->Text.Trim();
+    uint32_t frameNumber;
+
+    try {
+        if (frameNumStr.Pos("0x") == 1 || frameNumStr.Pos("0X") == 1) {
+            // Hex format
+            frameNumber = StrToInt("$" + frameNumStr.SubString(3, frameNumStr.Length() - 2));
+        } else {
+            // Decimal format
+            frameNumber = StrToInt(frameNumStr);
+        }
+
+        // Increment (with wraparound)
+        if (frameNumber < 0xFFFFFFFF) {
+            frameNumber++;
+        } else {
+            frameNumber = 0;
+        }
+
+        // Update field
+        FrameNumberEdit->Text = "0x" + IntToHex((int)frameNumber, 8);
+    } catch (...) {
+        // If parsing fails, reset to current frame
+        FrameNumberEdit->Text = "0xFFFFFFFF";
+    }
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::FrameNumberCurrentButtonClick(TObject *Sender) {
+    (void)Sender;
+
+    if (!FrameNumberEdit) return;
+
+    // Set to current frame (0xFFFFFFFF)
+    FrameNumberEdit->Text = "0xFFFFFFFF";
+}
+
+//---------------------------------------------------------------------------
 void TMainForm::SendFrameTransferRequest(uint32_t frameNumber)
 {
     // Send FRAME_TRANSFER_REQUEST (0x520) as extended frame with module ID
@@ -2445,6 +2523,11 @@ void TMainForm::ProcessFrameTransferEnd(const uint8_t* data) {
         if (FrameCRCLabel) {
             FrameCRCLabel->Caption = "CRC: OK (0x" + IntToHex(frameCRC, 8) + ")";
             FrameCRCLabel->Font->Color = clGreen;
+        }
+
+        // Update frame number field with the received frame counter
+        if (FrameNumberEdit) {
+            FrameNumberEdit->Text = "0x" + IntToHex((int)frameCounter, 8);
         }
 
         // Write to CSV

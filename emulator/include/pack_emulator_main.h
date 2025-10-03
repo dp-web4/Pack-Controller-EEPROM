@@ -92,6 +92,9 @@ __published:	// IDE-managed Components
     TLabel *FrameNumberLabel;
     TLabel *FrameBytesLabel;
     TLabel *FrameCRCLabel;
+    TButton *FrameNumberDecButton;
+    TButton *FrameNumberIncButton;
+    TButton *FrameNumberCurrentButton;
     
     // History tab controls
     TMemo *HistoryMemo;
@@ -167,6 +170,9 @@ __published:	// IDE-managed Components
     void __fastcall DetailsPageControlChange(TObject *Sender);
     void __fastcall ExportCheckClick(TObject *Sender);
     void __fastcall GetFrameButtonClick(TObject *Sender);
+    void __fastcall FrameNumberDecButtonClick(TObject *Sender);
+    void __fastcall FrameNumberIncButtonClick(TObject *Sender);
+    void __fastcall FrameNumberCurrentButtonClick(TObject *Sender);
     
 private:	// User declarations
     PackEmulator::ModuleManager* moduleManager;
