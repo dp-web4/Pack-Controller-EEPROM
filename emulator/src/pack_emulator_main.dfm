@@ -425,22 +425,60 @@ object MainForm: TMainForm
           RowCount = 15
           TabOrder = 0
         end
-        object ExportCheck: TCheckBox
+        object ExportCellsCheck: TCheckBox
           Left = 376
           Top = 16
           Width = 97
           Height = 17
-          Caption = 'Export CSV'
+          Caption = 'Export Cells'
           Checked = False
           State = cbUnchecked
           TabOrder = 1
+          OnClick = ExportCellsCheckClick
+        end
+        object ExportFramesCheck: TCheckBox
+          Left = 480
+          Top = 16
+          Width = 110
+          Height = 17
+          Caption = 'Export Frames'
+          Checked = False
+          State = cbUnchecked
+          TabOrder = 2
+          OnClick = ExportFramesCheckClick
         end
         object ExportFileLabel: TLabel
           Left = 376
           Top = 36
-          Width = 200
+          Width = 50
           Height = 13
-          Caption = ''
+          Caption = 'Filename:'
+        end
+        object ExportFilenameEdit: TEdit
+          Left = 432
+          Top = 33
+          Width = 300
+          Height = 21
+          TabOrder = 3
+          Text = 'cell_export.csv'
+        end
+        object ExportAppendButton: TButton
+          Left = 432
+          Top = 57
+          Width = 70
+          Height = 21
+          Caption = 'Append'
+          TabOrder = 4
+          OnClick = ExportAppendButtonClick
+        end
+        object ExportOverwriteButton: TButton
+          Left = 507
+          Top = 57
+          Width = 70
+          Height = 21
+          Caption = 'Overwrite'
+          TabOrder = 5
+          OnClick = ExportOverwriteButtonClick
         end
         object GetFrameButton: TButton
           Left = 376

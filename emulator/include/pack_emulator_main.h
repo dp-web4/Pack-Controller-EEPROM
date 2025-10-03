@@ -85,8 +85,12 @@ __published:	// IDE-managed Components
     // Cells tab controls
     TStringGrid *CellGrid;
     // TChart *CellVoltageChart;  // Commented out - requires TeeChart component
-    TCheckBox *ExportCheck;
+    TCheckBox *ExportCellsCheck;
+    TCheckBox *ExportFramesCheck;
     TLabel *ExportFileLabel;
+    TEdit *ExportFilenameEdit;
+    TButton *ExportAppendButton;
+    TButton *ExportOverwriteButton;
     TButton *GetFrameButton;
     TEdit *FrameNumberEdit;
     TLabel *FrameNumberLabel;
@@ -168,7 +172,10 @@ __published:	// IDE-managed Components
     void __fastcall FormCreate(TObject *Sender);
     void __fastcall FormDestroy(TObject *Sender);
     void __fastcall DetailsPageControlChange(TObject *Sender);
-    void __fastcall ExportCheckClick(TObject *Sender);
+    void __fastcall ExportCellsCheckClick(TObject *Sender);
+    void __fastcall ExportFramesCheckClick(TObject *Sender);
+    void __fastcall ExportAppendButtonClick(TObject *Sender);
+    void __fastcall ExportOverwriteButtonClick(TObject *Sender);
     void __fastcall GetFrameButtonClick(TObject *Sender);
     void __fastcall FrameNumberDecButtonClick(TObject *Sender);
     void __fastcall FrameNumberIncButtonClick(TObject *Sender);
@@ -217,6 +224,7 @@ private:	// User declarations
     // CSV export functionality
     std::ofstream* csvFile;
     bool exportEnabled;
+    bool exportFrameMode;  // true = export from frames, false = export from streaming cells
     int currentCellPollCycle;  // Track which cell we're polling (0 to expectedCount-1)
     std::vector<float> exportVoltages;  // Buffer to collect voltages for current cycle
     std::vector<float> exportTemperatures;  // Buffer to collect temperatures for current cycle
@@ -238,7 +246,7 @@ private:	// User declarations
     uint32_t frameCRC;  // CRC from END message
 
     // CSV export methods
-    void StartCSVExport();
+    void StartCSVExport(bool appendMode);
     void StopCSVExport();
     void WriteCSVRow();
 

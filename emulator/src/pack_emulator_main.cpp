@@ -82,15 +82,20 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     // Initialize CSV export variables
     csvFile = NULL;
     exportEnabled = false;
+    exportFrameMode = false;
     currentCellPollCycle = 0;
     exportModuleId = 0;
     exportExpectedCount = 0;
     exportReceivedCount = 0;
 
-    // Connect ExportCheck event handler
-    if (ExportCheck) {
-        ExportCheck->OnClick = ExportCheckClick;
-        ExportCheck->Checked = false;  // Default to off
+    // Connect export checkbox event handlers
+    if (ExportCellsCheck) {
+        ExportCellsCheck->OnClick = ExportCellsCheckClick;
+        ExportCellsCheck->Checked = false;  // Default to off
+    }
+    if (ExportFramesCheck) {
+        ExportFramesCheck->OnClick = ExportFramesCheckClick;
+        ExportFramesCheck->Checked = false;  // Default to off
     }
 
     // Initialize frame transfer state
@@ -2165,18 +2170,65 @@ void TMainForm::SendDiscoveryRequest() {
 //---------------------------------------------------------------------------
 // CSV Export functionality
 //---------------------------------------------------------------------------
-void __fastcall TMainForm::ExportCheckClick(TObject *Sender) {
+void __fastcall TMainForm::ExportCellsCheckClick(TObject *Sender) {
     (void)Sender;
 
-    if (ExportCheck->Checked) {
-        StartCSVExport();
+    if (ExportCellsCheck->Checked) {
+        // Clear frames checkbox - mutually exclusive
+        ExportFramesCheck->Checked = false;
     } else {
         StopCSVExport();
     }
+    // Note: Export is now started by Append/Overwrite buttons
 }
 
 //---------------------------------------------------------------------------
-void TMainForm::StartCSVExport() {
+void __fastcall TMainForm::ExportFramesCheckClick(TObject *Sender) {
+    (void)Sender;
+
+    if (ExportFramesCheck->Checked) {
+        // Clear cells checkbox - mutually exclusive
+        ExportCellsCheck->Checked = false;
+    } else {
+        StopCSVExport();
+    }
+    // Note: Export is now started by Append/Overwrite buttons
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
+    (void)Sender;
+
+    // Determine which mode is enabled
+    if (!ExportCellsCheck->Checked && !ExportFramesCheck->Checked) {
+        ShowError("Please select either 'Export Cells' or 'Export Frames'");
+        return;
+    }
+
+    exportFrameMode = ExportFramesCheck->Checked;
+
+    // Start export in append mode
+    StartCSVExport(true);
+}
+
+//---------------------------------------------------------------------------
+void __fastcall TMainForm::ExportOverwriteButtonClick(TObject *Sender) {
+    (void)Sender;
+
+    // Determine which mode is enabled
+    if (!ExportCellsCheck->Checked && !ExportFramesCheck->Checked) {
+        ShowError("Please select either 'Export Cells' or 'Export Frames'");
+        return;
+    }
+
+    exportFrameMode = ExportFramesCheck->Checked;
+
+    // Start export in overwrite mode
+    StartCSVExport(false);
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::StartCSVExport(bool appendMode) {
     if (csvFile != NULL) {
         return;  // Already exporting
     }
@@ -2185,14 +2237,16 @@ void TMainForm::StartCSVExport() {
     exportModuleId = selectedModuleId;
     if (exportModuleId == 0) {
         ShowError("Please select a module before starting export");
-        ExportCheck->Checked = false;
+        ExportCellsCheck->Checked = false;
+        ExportFramesCheck->Checked = false;
         return;
     }
 
     PackEmulator::ModuleInfo* module = moduleManager->GetModule(exportModuleId);
     if (module == NULL) {
         ShowError("Selected module not found");
-        ExportCheck->Checked = false;
+        ExportCellsCheck->Checked = false;
+        ExportFramesCheck->Checked = false;
         return;
     }
 
@@ -2200,41 +2254,47 @@ void TMainForm::StartCSVExport() {
     exportExpectedCount = module->cellCount;
     if (exportExpectedCount == 0) {
         ShowError("Module has no cells configured");
-        ExportCheck->Checked = false;
+        ExportCellsCheck->Checked = false;
+        ExportFramesCheck->Checked = false;
         return;
     }
 
-    // Create filename with timestamp
-    time_t rawtime;
-    struct tm* timeinfo;
-    char timeBuffer[50];
-    char filenameBuffer[100];
-    time(&rawtime);
-    timeinfo = localtime(&rawtime);
+    // Get filename from edit box
+    String filename = ExportFilenameEdit->Text.Trim();
+    if (filename.IsEmpty()) {
+        ShowError("Please enter a filename");
+        ExportCellsCheck->Checked = false;
+        ExportFramesCheck->Checked = false;
+        return;
+    }
 
-    // Format the time portion
-    strftime(timeBuffer, sizeof(timeBuffer), "%Y%m%d_%H%M%S", timeinfo);
+    // Check if file exists for append mode
+    bool fileExists = FileExists(filename);
 
-    // Combine with module unique ID to create full filename (makes it traceable to specific hardware)
-    sprintf(filenameBuffer, "CellData_%08X_%s.csv", module->uniqueId, timeBuffer);
-    String filename = String(filenameBuffer);
+    // Open CSV file in appropriate mode
+    if (appendMode && fileExists) {
+        csvFile = new std::ofstream(filename.c_str(), std::ios::app);
+    } else {
+        csvFile = new std::ofstream(filename.c_str());
+    }
 
-    // Open CSV file
-    csvFile = new std::ofstream(filename.c_str());
     if (!csvFile->is_open()) {
         delete csvFile;
         csvFile = NULL;
-        ShowError("Failed to create CSV file: " + filename);
-        ExportCheck->Checked = false;
+        ShowError("Failed to open CSV file: " + filename);
+        ExportCellsCheck->Checked = false;
+        ExportFramesCheck->Checked = false;
         return;
     }
 
-    // Write header
-    *csvFile << "Timestamp,CellsExpected,CellsReceived";
-    for (int i = 0; i < exportExpectedCount; i++) {
-        *csvFile << ",V" << (i + 1) << ",T" << (i + 1);
+    // Write header only if file is new or overwrite mode
+    if (!appendMode || !fileExists) {
+        *csvFile << "Timestamp,CellsExpected,CellsReceived";
+        for (int i = 0; i < exportExpectedCount; i++) {
+            *csvFile << ",V" << (i + 1) << ",T" << (i + 1);
+        }
+        *csvFile << std::endl;
     }
-    *csvFile << std::endl;
 
     // Initialize buffers
     exportVoltages.clear();
@@ -2548,49 +2608,89 @@ void TMainForm::ProcessFrameTransferEnd(const uint8_t* data) {
 
 //---------------------------------------------------------------------------
 void TMainForm::WriteFrameToCSV() {
-    if (!SaveDialog->Execute()) {
-        LogMessage("Frame export cancelled");
+    // Only process if export frames mode is enabled
+    if (!exportFrameMode || csvFile == NULL) {
         frameTransferState = FRAME_IDLE;
         return;
     }
 
-    String filename = SaveDialog->FileName;
-    std::ofstream file(filename.c_str());
+    // Parse frame metadata from frameBuffer (based on STORE.h FrameMetadata structure)
+    // Offsets based on FrameMetadata in STORE.h:
+    // uint32_t validSig (0), uint16_t frameBytes (4), uint64_t timestamp (6),
+    // uint32_t moduleUniqueId (14), then session/frame variables...
+    // uint32_t frameCounter at offset ~100, nstrings/currentIndex/readingCount follow
 
-    if (!file.is_open()) {
-        ShowError("Failed to open file for writing");
+    // Check valid signature at offset 0
+    uint32_t* pValidSig = (uint32_t*)&frameBuffer[0];
+    if (*pValidSig != 0xBA77DA7A) {
+        LogMessage("Warning: Frame has invalid signature 0x" + IntToHex((int)*pValidSig, 8) + ", skipping export");
         frameTransferState = FRAME_IDLE;
         return;
     }
 
-    // Write header
-    file << "Frame Counter," << frameCounter << std::endl;
-    file << "Module ID," << (int)selectedModuleId << std::endl;
-    file << "Segments Received," << frameSegmentCount << std::endl;
-    file << "CRC32,0x" << std::hex << std::setw(8) << std::setfill('0') << frameCRC << std::dec << std::endl;
-    file << std::endl;
+    // Parse key metadata fields
+    uint64_t* pTimestamp = (uint64_t*)&frameBuffer[6];
+    uint64_t timestamp = *pTimestamp;
 
-    // Write raw frame data as hex dump
-    file << "Offset,Hex,ASCII" << std::endl;
-    for (int i = 0; i < 1024; i += 16) {
-        file << "0x" << std::hex << std::setw(4) << std::setfill('0') << i << std::dec << ",";
+    // sg_u8CellCountExpected is at offset 18 (after moduleUniqueId at 14)
+    uint8_t cellCountExpected = frameBuffer[18];
 
-        // Hex bytes
-        for (int j = 0; j < 16 && (i + j) < 1024; j++) {
-            file << std::hex << std::setw(2) << std::setfill('0') << (int)frameBuffer[i + j] << " ";
-        }
-        file << ",";
+    // Circular buffer fields are near end of metadata (offsets ~100-106)
+    // Based on FrameMetadata: frameCounter(100), nstrings(104), currentIndex(106), readingCount(108)
+    uint32_t* pFrameCounter = (uint32_t*)&frameBuffer[100];
+    uint16_t* pNstrings = (uint16_t*)&frameBuffer[104];
+    uint16_t* pCurrentIndex = (uint16_t*)&frameBuffer[106];
+    uint16_t* pReadingCount = (uint16_t*)&frameBuffer[108];
 
-        // ASCII representation
-        for (int j = 0; j < 16 && (i + j) < 1024; j++) {
-            char c = frameBuffer[i + j];
-            file << (c >= 32 && c < 127 ? c : '.');
-        }
-        file << std::endl;
+    uint16_t nstrings = *pNstrings;
+    uint16_t readingCount = *pReadingCount;
+
+    if (readingCount == 0 || cellCountExpected == 0) {
+        LogMessage("No readings in frame (count=" + IntToStr(readingCount) + ", cells=" + IntToStr(cellCountExpected) + "), skipping export");
+        frameTransferState = FRAME_IDLE;
+        return;
     }
 
-    file.close();
-    LogMessage("Frame exported to " + filename);
+    // FrameMetadata size is 128 bytes (sizeof includes padding to alignment)
+    // Cell data buffer starts at offset 128
+    const int METADATA_SIZE = 128;
+    const int CELL_DATA_SIZE = 4;  // CellData: uint16_t voltage + int16_t temperature
+    int bytesPerString = cellCountExpected * CELL_DATA_SIZE;
+
+    // Export all valid string readings from circular buffer
+    for (int stringIdx = 0; stringIdx < readingCount && stringIdx < nstrings; stringIdx++) {
+        int stringOffset = METADATA_SIZE + (stringIdx * bytesPerString);
+
+        // Write timestamp from frame metadata
+        *csvFile << timestamp << ",";
+
+        // Write cell counts
+        *csvFile << (int)cellCountExpected << ",";
+        *csvFile << (int)cellCountExpected << ",";  // Assume all cells reported
+
+        // Write cell voltages and temperatures
+        for (int cellIdx = 0; cellIdx < cellCountExpected; cellIdx++) {
+            int cellOffset = stringOffset + (cellIdx * CELL_DATA_SIZE);
+
+            // Parse voltage (uint16_t millivolts)
+            uint16_t* pVoltage = (uint16_t*)&frameBuffer[cellOffset];
+            float voltageV = (*pVoltage) / 1000.0f;
+
+            // Parse temperature (int16_t, tenths of degree C)
+            int16_t* pTemperature = (int16_t*)&frameBuffer[cellOffset + 2];
+            float tempC = (*pTemperature) / 10.0f;
+
+            *csvFile << voltageV << "," << tempC;
+            if (cellIdx < cellCountExpected - 1) {
+                *csvFile << ",";
+            }
+        }
+        *csvFile << std::endl;
+    }
+
+    csvFile->flush();
+    LogMessage("Exported " + IntToStr(readingCount) + " string readings from frame " +
+               IntToHex((int)*pFrameCounter, 8) + " to CSV");
     frameTransferState = FRAME_IDLE;
 }
 
