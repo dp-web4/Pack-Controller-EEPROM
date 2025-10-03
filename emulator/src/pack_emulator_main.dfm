@@ -466,6 +466,21 @@ object MainForm: TMainForm
           Height = 13
           Caption = 'Frame # (or current)'
         end
+        object FrameBytesLabel: TLabel
+          Left = 376
+          Top = 90
+          Width = 100
+          Height = 13
+          Caption = 'Bytes: 0/1024'
+        end
+        object FrameCRCLabel: TLabel
+          Left = 376
+          Top = 110
+          Width = 200
+          Height = 13
+          Caption = 'CRC: Not started'
+          Font.Color = clGray
+        end
       end
       object HistoryTab: TTabSheet
         Caption = 'History'

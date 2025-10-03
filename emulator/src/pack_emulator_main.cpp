@@ -100,6 +100,15 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
     frameCRC = 0;
     memset(frameBuffer, 0, sizeof(frameBuffer));
 
+    // Initialize frame transfer UI labels
+    if (FrameBytesLabel) {
+        FrameBytesLabel->Caption = "Bytes: 0/1024";
+    }
+    if (FrameCRCLabel) {
+        FrameCRCLabel->Caption = "CRC: Not started";
+        FrameCRCLabel->Font->Color = clGray;
+    }
+
     LogMessage("Pack Controller Emulator initialized");
 }
 
@@ -984,15 +993,19 @@ void TMainForm::UpdateConnectionStatus(bool connected) {
 void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
     // Process message based on ID
     // For extended frames, the standard 11-bit ID is in bits 28-18
-    // The module ID is in bits 17-0
+    // Bits 0-7: Module ID
+    // Bits 8-17: Sequence number (for frame transfer DATA messages)
     uint32_t canId;
     uint8_t moduleIdFromExtended = 0;
-    
+    uint16_t sequenceNum = 0;
+
     if (msg.isExtended) {
         // Extended frame: extract standard ID from bits 28-18
         canId = (msg.id >> 18) & 0x7FF;
-        // Module ID is in lower bits
+        // Module ID is in bits 0-7
         moduleIdFromExtended = msg.id & 0xFF;
+        // Sequence number is in bits 8-17
+        sequenceNum = (msg.id >> 8) & 0x3FF;
     } else {
         // Standard frame: use the ID directly
         canId = msg.id & 0x7FF;
@@ -1037,7 +1050,12 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
             description = " [Frame Start]";
             break;
         case ID_FRAME_TRANSFER_DATA:
-            description = " [Frame Data]";
+            // Include sequence number for DATA messages
+            if (msg.isExtended && sequenceNum < 128) {
+                description = " [Frame Data #" + IntToStr(sequenceNum) + "]";
+            } else {
+                description = " [Frame Data]";
+            }
             break;
         case ID_FRAME_TRANSFER_END:
             description = " [Frame End]";
@@ -1234,7 +1252,7 @@ void TMainForm::OnCANMessage(const PackEmulator::CANMessage& msg) {
         ProcessFrameTransferStart(msg.data);
     }
     else if (canId == ID_FRAME_TRANSFER_DATA) {
-        ProcessFrameTransferData(msg.data);
+        ProcessFrameTransferData(msg.data, sequenceNum);
     }
     else if (canId == ID_FRAME_TRANSFER_END) {
         ProcessFrameTransferEnd(msg.data);
@@ -2357,10 +2375,19 @@ void TMainForm::ProcessFrameTransferStart(const uint8_t* data) {
 
     frameTransferState = FRAME_RECEIVING_DATA;
     frameSegmentCount = 0;
+
+    // Update UI labels
+    if (FrameBytesLabel) {
+        FrameBytesLabel->Caption = "Bytes: 0/1024";
+    }
+    if (FrameCRCLabel) {
+        FrameCRCLabel->Caption = "CRC: Waiting...";
+        FrameCRCLabel->Font->Color = clBlack;
+    }
 }
 
 //---------------------------------------------------------------------------
-void TMainForm::ProcessFrameTransferData(const uint8_t* data) {
+void TMainForm::ProcessFrameTransferData(const uint8_t* data, uint16_t sequenceNum) {
     if (frameTransferState != FRAME_RECEIVING_DATA) {
         LogMessage("Warning: Received frame data but not in receiving state");
         return;
@@ -2372,10 +2399,25 @@ void TMainForm::ProcessFrameTransferData(const uint8_t* data) {
         return;
     }
 
-    // Copy 8 bytes to buffer
-    uint16_t offset = frameSegmentCount * 8;
-    memcpy(&frameBuffer[offset], data, 8);
-    frameSegmentCount++;
+    // Validate sequence number matches expected segment count
+    if (sequenceNum != frameSegmentCount) {
+        LogMessage("Warning: Sequence mismatch! Expected " + IntToStr(frameSegmentCount) +
+                   ", got " + IntToStr(sequenceNum));
+        // Continue anyway but log the error
+    }
+
+    // Copy 8 bytes to buffer at position indicated by sequence number (more robust)
+    if (sequenceNum < 128) {
+        uint16_t offset = sequenceNum * 8;
+        memcpy(&frameBuffer[offset], data, 8);
+        frameSegmentCount++;
+
+        // Update bytes received label
+        uint16_t bytesReceived = frameSegmentCount * 8;
+        if (FrameBytesLabel) {
+            FrameBytesLabel->Caption = "Bytes: " + IntToStr(bytesReceived) + "/1024";
+        }
+    }
 
     // Log progress every 16 segments
     if (frameSegmentCount % 16 == 0) {
@@ -2399,12 +2441,25 @@ void TMainForm::ProcessFrameTransferEnd(const uint8_t* data) {
         LogMessage("Frame transfer complete: CRC OK, " + IntToStr(frameSegmentCount) + " segments received");
         frameTransferState = FRAME_COMPLETE;
 
+        // Update CRC status label - success
+        if (FrameCRCLabel) {
+            FrameCRCLabel->Caption = "CRC: OK (0x" + IntToHex(frameCRC, 8) + ")";
+            FrameCRCLabel->Font->Color = clGreen;
+        }
+
         // Write to CSV
         WriteFrameToCSV();
     } else {
         LogMessage("Frame transfer FAILED: CRC mismatch (expected " +
                    IntToHex(frameCRC, 8) + ", got " + IntToHex(calculatedCRC, 8) + ")");
         frameTransferState = FRAME_IDLE;
+
+        // Update CRC status label - failed
+        if (FrameCRCLabel) {
+            FrameCRCLabel->Caption = "CRC: FAIL (exp: 0x" + IntToHex(frameCRC, 8) +
+                                     ", got: 0x" + IntToHex(calculatedCRC, 8) + ")";
+            FrameCRCLabel->Font->Color = clRed;
+        }
     }
 }
 

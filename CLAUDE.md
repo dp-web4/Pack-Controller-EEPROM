@@ -24,6 +24,14 @@
 - Need to test changes before pushing (reminder to self!)
 - Module display properly preserves deregistered modules in list now
 
+## Build Environment
+**IMPORTANT**: This project runs in WSL but uses Windows-based build tools:
+- **Pack Controller firmware**: Uses STM32CubeIDE (Windows/Linux) - build process varies
+- **Pack Emulator**: Uses Borland C++ Builder 6 (Windows) - **cannot build from WSL**
+- **DO NOT** attempt to build the emulator from WSL using make, gcc, or bcc32
+- User must compile manually in Windows environment
+- Focus on code correctness, not attempting builds
+
 ## Git Authentication
 **Universal Push Command**:
 ```bash

@@ -90,6 +90,8 @@ __published:	// IDE-managed Components
     TButton *GetFrameButton;
     TEdit *FrameNumberEdit;
     TLabel *FrameNumberLabel;
+    TLabel *FrameBytesLabel;
+    TLabel *FrameCRCLabel;
     
     // History tab controls
     TMemo *HistoryMemo;
@@ -237,7 +239,7 @@ private:	// User declarations
     // Frame transfer methods
     void SendFrameTransferRequest(uint32_t frameNumber);
     void ProcessFrameTransferStart(const uint8_t* data);
-    void ProcessFrameTransferData(const uint8_t* data);
+    void ProcessFrameTransferData(const uint8_t* data, uint16_t sequenceNum);
     void ProcessFrameTransferEnd(const uint8_t* data);
     void WriteFrameToCSV();
     uint32_t CalculateCRC32(const uint8_t* data, uint16_t length);
