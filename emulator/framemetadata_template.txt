@@ -1,8 +1,10 @@
 // FrameMetadata Display Template
 // Generated from ModuleCPU/STORE.h
-// Use offsetof() values from offset_calc program
+// IMPORTANT: These are AVR compiler offsets!
+// AVR does NOT add padding after uint16_t before uint64_t
+// x86/x64 gcc WOULD add 2 bytes padding - these offsets are -2 from gcc
 
-Fields (with offsetof values from gcc):
+Fields (AVR compiler offsets):
 ==========================================
 
 validSig (offset 0, uint32_t)
@@ -13,125 +15,125 @@ frameBytes (offset 4, uint16_t)
   Comment: actual number of bytes per frame, for diagnostics
   Display: "Frame Bytes: %u", value
 
-timestamp (offset 8, uint64_t)
+timestamp (offset 6, uint64_t) [AVR: NO PADDING!]
   Display: "Timestamp: %llu", value
 
-moduleUniqueId (offset 16, uint32_t)
+moduleUniqueId (offset 14, uint32_t) [AVR: offset 14, not 16!]
   Comment: unique ID for this module (from EEPROM)
   Display: "Module Unique ID: 0x%08X", value
 
-sg_u8WDTCount (offset 20, uint8_t)
+sg_u8WDTCount (offset 18, uint8_t)
   Comment: number of WDT resets in current session
   Display: "WDT Resets: %u", value
 
-sg_u8CellCPUCountFewest (offset 21, uint8_t)
+sg_u8CellCPUCountFewest (offset 19, uint8_t)
   Comment: for the session
   Display: "Cell CPU Count (Min): %u", value
 
-sg_u8CellCPUCountMost (offset 22, uint8_t)
+sg_u8CellCPUCountMost (offset 20, uint8_t)
   Comment: for the session
   Display: "Cell CPU Count (Max): %u", value
 
-sg_u8CellCountExpected (offset 23, uint8_t)
+sg_u8CellCountExpected (offset 21, uint8_t)
   Display: "Cell Count Expected: %u", value
 
-u16maxCurrent (offset 24, uint16_t)
+u16maxCurrent (offset 22, uint16_t)
   Comment: session current is in units of 0.02A relative to CURRENT_FLOOR -655.36
   Display: "Max Current: %.2f A", (-655.36 + value * 0.02)
 
-u16minCurrent (offset 26, uint16_t)
+u16minCurrent (offset 24, uint16_t)
   Display: "Min Current: %.2f A", (-655.36 + value * 0.02)
 
-u16avgCurrent (offset 28, uint16_t)
+u16avgCurrent (offset 26, uint16_t)
   Display: "Avg Current: %.2f A", (-655.36 + value * 0.02)
 
-sg_u8CurrentBufferIndex (offset 30, uint8_t)
+sg_u8CurrentBufferIndex (offset 28, uint8_t)
   Display: "Current Buffer Index: %u", value
 
-sg_i32VoltageStringMin (offset 32, int32_t)
+sg_i32VoltageStringMin (offset 30, int32_t)
   Comment: in millivolts
   Display: "String Voltage Min: %d mV", value
 
-sg_i32VoltageStringMax (offset 36, int32_t)
+sg_i32VoltageStringMax (offset 34, int32_t)
   Comment: in millivolts
   Display: "String Voltage Max: %d mV", value
 
-sg_i16VoltageStringPerADC (offset 40, int16_t)
+sg_i16VoltageStringPerADC (offset 38, int16_t)
   Comment: in ADC_VOLT_FRACTION fractions of millivolts
   Display: "String Voltage Per ADC: %d", value
 
-bDischargeOn (offset 42, bool/uint8_t)
+bDischargeOn (offset 40, bool/uint8_t)
   Display: "Discharge On: %s", (value ? "Yes" : "No")
 
-sg_u16CellCPUI2CErrors (offset 44, uint16_t)
+sg_u16CellCPUI2CErrors (offset 42, uint16_t)
   Display: "Cell I2C Errors: %u", value
 
-sg_u8CellFirstI2CError (offset 46, uint8_t)
+sg_u8CellFirstI2CError (offset 44, uint8_t)
   Display: "First I2C Error Cell: %u", value
 
-sg_u16BytesReceived (offset 48, uint16_t)
+sg_u16BytesReceived (offset 46, uint16_t)
   Display: "Bytes Received: %u", value
 
-sg_u8CellCPUCount (offset 50, uint8_t)
+sg_u8CellCPUCount (offset 48, uint8_t)
   Comment: for the frame
   Display: "Cell CPU Count (Frame): %u", value
 
-sg_u8MCRXFramingErrors (offset 51, uint8_t)
+sg_u8MCRXFramingErrors (offset 49, uint8_t)
   Display: "MC RX Framing Errors: %u", value
 
-sg_u8LastCompleteCellCount (offset 52, uint8_t)
+sg_u8LastCompleteCellCount (offset 50, uint8_t)
   Comment: Cell count from last complete frame
   Display: "Last Complete Cell Count: %u", value
 
-u16frameCurrent (offset 54, uint16_t)
+u16frameCurrent (offset 52, uint16_t)
   Display: "Frame Current: %.2f A", (-655.36 + value * 0.02)
 
-sg_s16HighestCellTemp (offset 56, int16_t)
+sg_s16HighestCellTemp (offset 54, int16_t)
   Display: "Highest Cell Temp: %.1f C", (value / 10.0)
 
-sg_s16LowestCellTemp (offset 58, int16_t)
+sg_s16LowestCellTemp (offset 56, int16_t)
   Display: "Lowest Cell Temp: %.1f C", (value / 10.0)
 
-sg_s16AverageCellTemp (offset 60, int16_t)
+sg_s16AverageCellTemp (offset 58, int16_t)
   Display: "Average Cell Temp: %.1f C", (value / 10.0)
 
-sg_u16HighestCellVoltage (offset 62, uint16_t)
+sg_u16HighestCellVoltage (offset 60, uint16_t)
   Comment: in millivolts
   Display: "Highest Cell Voltage: %u mV", value
 
-sg_u16LowestCellVoltage (offset 64, uint16_t)
+sg_u16LowestCellVoltage (offset 62, uint16_t)
   Comment: in millivolts
   Display: "Lowest Cell Voltage: %u mV", value
 
-sg_u16AverageCellVoltage (offset 66, uint16_t)
+sg_u16AverageCellVoltage (offset 64, uint16_t)
   Comment: in millivolts
   Display: "Average Cell Voltage: %u mV", value
 
-sg_u32CellVoltageTotal (offset 68, uint32_t)
+sg_u32CellVoltageTotal (offset 66, uint32_t)
   Comment: All cell CPU voltages added up, in millivolts
   Display: "Cell Voltage Total: %u mV", value
 
-sg_i32VoltageStringTotal (offset 72, int32_t)
+sg_i32VoltageStringTotal (offset 70, int32_t)
   Comment: in 15mv increments, from ADC
   Display: "String Voltage Total: %d (15mV units)", value
 
-ADCReadings (offset 76, SADCReading[5])
+ADCReadings (offset 74, SADCReading[5])
   Note: Array of 5 SADCReading structs, each 4 bytes
   Skip for now or display individually
 
-frameCounter (offset 96, uint32_t)
+frameCounter (offset 94, uint32_t)
   Comment: Persistent frame counter
   Display: "Frame Counter: 0x%08X (%u)", value, value
 
-nstrings (offset 100, uint16_t)
+nstrings (offset 98, uint16_t)
   Comment: Number of string readings that can fit in buffer
   Display: "Circular Buffer Capacity: %u readings", value
 
-currentIndex (offset 102, uint16_t)
+currentIndex (offset 100, uint16_t)
   Comment: Current position in circular buffer (0 to nstrings-1)
   Display: "Current Index: %u", value
 
-readingCount (offset 104, uint16_t)
+readingCount (offset 102, uint16_t)
   Comment: Number of valid readings in buffer
   Display: "Reading Count: %u", value
 

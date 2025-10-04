@@ -2649,17 +2649,17 @@ void TMainForm::WriteFrameToCSV() {
     }
 
     // Parse key metadata fields (same offsets as DisplayFrameMetadata)
-    // Offsets from gcc offsetof() calculation
-    uint64_t* pTimestamp = (uint64_t*)&frameBuffer[8];
+    // AVR compiler offsets - no padding after frameBytes
+    uint64_t* pTimestamp = (uint64_t*)&frameBuffer[6];
     uint64_t timestamp = *pTimestamp;
 
-    uint8_t cellCountExpected = frameBuffer[23];
+    uint8_t cellCountExpected = frameBuffer[21];
 
     // Circular buffer fields
-    uint32_t* pFrameCounter = (uint32_t*)&frameBuffer[96];
-    uint16_t* pNstrings = (uint16_t*)&frameBuffer[100];
-    uint16_t* pCurrentIndex = (uint16_t*)&frameBuffer[102];
-    uint16_t* pReadingCount = (uint16_t*)&frameBuffer[104];
+    uint32_t* pFrameCounter = (uint32_t*)&frameBuffer[94];
+    uint16_t* pNstrings = (uint16_t*)&frameBuffer[98];
+    uint16_t* pCurrentIndex = (uint16_t*)&frameBuffer[100];
+    uint16_t* pReadingCount = (uint16_t*)&frameBuffer[102];
 
     uint16_t nstrings = *pNstrings;
     uint16_t readingCount = *pReadingCount;
@@ -2670,9 +2670,9 @@ void TMainForm::WriteFrameToCSV() {
         return;
     }
 
-    // FrameMetadata size is 112 bytes (verified with offsetof)
-    // Cell data buffer starts at offset 112
-    const int METADATA_SIZE = 112;
+    // FrameMetadata size is 110 bytes on AVR (2 bytes less due to no padding)
+    // Cell data buffer starts at offset 110
+    const int METADATA_SIZE = 110;
     const int CELL_DATA_SIZE = 4;  // CellData: uint16_t voltage + int16_t temperature
     int bytesPerString = cellCountExpected * CELL_DATA_SIZE;
 
@@ -2740,61 +2740,61 @@ void TMainForm::DisplayFrameMetadata() {
         }
     }
 
-    // Parse ALL frame metadata fields using offsets from framemetadata_template.txt
-    // All offsets verified with gcc offsetof()
+    // Parse ALL frame metadata fields using AVR compiler offsets
+    // AVR doesn't add padding after frameBytes - uint64_t at offset 6, not 8!
 
     // Basic frame identification
     uint32_t validSig = *(uint32_t*)&frameBuffer[0];
     uint16_t frameBytes = *(uint16_t*)&frameBuffer[4];
-    uint64_t timestamp = *(uint64_t*)&frameBuffer[8];
-    uint32_t moduleUniqueId = *(uint32_t*)&frameBuffer[16];
+    uint64_t timestamp = *(uint64_t*)&frameBuffer[6];       // AVR: no padding
+    uint32_t moduleUniqueId = *(uint32_t*)&frameBuffer[14]; // AVR: offset 14
 
     // Session statistics
-    uint8_t sg_u8WDTCount = frameBuffer[20];
-    uint8_t sg_u8CellCPUCountFewest = frameBuffer[21];
-    uint8_t sg_u8CellCPUCountMost = frameBuffer[22];
-    uint8_t sg_u8CellCountExpected = frameBuffer[23];
+    uint8_t sg_u8WDTCount = frameBuffer[18];
+    uint8_t sg_u8CellCPUCountFewest = frameBuffer[19];
+    uint8_t sg_u8CellCPUCountMost = frameBuffer[20];
+    uint8_t sg_u8CellCountExpected = frameBuffer[21];
 
     // Current measurements (in units of 0.02A relative to -655.36A)
-    uint16_t u16maxCurrent = *(uint16_t*)&frameBuffer[24];
-    uint16_t u16minCurrent = *(uint16_t*)&frameBuffer[26];
-    uint16_t u16avgCurrent = *(uint16_t*)&frameBuffer[28];
-    uint8_t sg_u8CurrentBufferIndex = frameBuffer[30];
+    uint16_t u16maxCurrent = *(uint16_t*)&frameBuffer[22];
+    uint16_t u16minCurrent = *(uint16_t*)&frameBuffer[24];
+    uint16_t u16avgCurrent = *(uint16_t*)&frameBuffer[26];
+    uint8_t sg_u8CurrentBufferIndex = frameBuffer[28];
 
     // String voltage measurements
-    int32_t sg_i32VoltageStringMin = *(int32_t*)&frameBuffer[32];
-    int32_t sg_i32VoltageStringMax = *(int32_t*)&frameBuffer[36];
-    int16_t sg_i16VoltageStringPerADC = *(int16_t*)&frameBuffer[40];
-    bool bDischargeOn = frameBuffer[42];
+    int32_t sg_i32VoltageStringMin = *(int32_t*)&frameBuffer[30];
+    int32_t sg_i32VoltageStringMax = *(int32_t*)&frameBuffer[34];
+    int16_t sg_i16VoltageStringPerADC = *(int16_t*)&frameBuffer[38];
+    bool bDischargeOn = frameBuffer[40];
 
     // Communication statistics
-    uint16_t sg_u16CellCPUI2CErrors = *(uint16_t*)&frameBuffer[44];
-    uint8_t sg_u8CellFirstI2CError = frameBuffer[46];
-    uint16_t sg_u16BytesReceived = *(uint16_t*)&frameBuffer[48];
-    uint8_t sg_u8CellCPUCount = frameBuffer[50];
-    uint8_t sg_u8MCRXFramingErrors = frameBuffer[51];
-    uint8_t sg_u8LastCompleteCellCount = frameBuffer[52];
+    uint16_t sg_u16CellCPUI2CErrors = *(uint16_t*)&frameBuffer[42];
+    uint8_t sg_u8CellFirstI2CError = frameBuffer[44];
+    uint16_t sg_u16BytesReceived = *(uint16_t*)&frameBuffer[46];
+    uint8_t sg_u8CellCPUCount = frameBuffer[48];
+    uint8_t sg_u8MCRXFramingErrors = frameBuffer[49];
+    uint8_t sg_u8LastCompleteCellCount = frameBuffer[50];
 
     // Frame-specific measurements
-    uint16_t u16frameCurrent = *(uint16_t*)&frameBuffer[54];
-    int16_t sg_s16HighestCellTemp = *(int16_t*)&frameBuffer[56];
-    int16_t sg_s16LowestCellTemp = *(int16_t*)&frameBuffer[58];
-    int16_t sg_s16AverageCellTemp = *(int16_t*)&frameBuffer[60];
+    uint16_t u16frameCurrent = *(uint16_t*)&frameBuffer[52];
+    int16_t sg_s16HighestCellTemp = *(int16_t*)&frameBuffer[54];
+    int16_t sg_s16LowestCellTemp = *(int16_t*)&frameBuffer[56];
+    int16_t sg_s16AverageCellTemp = *(int16_t*)&frameBuffer[58];
 
     // Cell voltage statistics
-    uint16_t sg_u16HighestCellVoltage = *(uint16_t*)&frameBuffer[62];
-    uint16_t sg_u16LowestCellVoltage = *(uint16_t*)&frameBuffer[64];
-    uint16_t sg_u16AverageCellVoltage = *(uint16_t*)&frameBuffer[66];
-    uint32_t sg_u32CellVoltageTotal = *(uint32_t*)&frameBuffer[68];
-    int32_t sg_i32VoltageStringTotal = *(int32_t*)&frameBuffer[72];
+    uint16_t sg_u16HighestCellVoltage = *(uint16_t*)&frameBuffer[60];
+    uint16_t sg_u16LowestCellVoltage = *(uint16_t*)&frameBuffer[62];
+    uint16_t sg_u16AverageCellVoltage = *(uint16_t*)&frameBuffer[64];
+    uint32_t sg_u32CellVoltageTotal = *(uint32_t*)&frameBuffer[66];
+    int32_t sg_i32VoltageStringTotal = *(int32_t*)&frameBuffer[70];
 
-    // ADCReadings array at offset 76 (5 structs, 4 bytes each) - skip for now
+    // ADCReadings array at offset 74 (5 structs, 4 bytes each) - skip for now
 
     // Frame counter and circular buffer
-    uint32_t frameCounter = *(uint32_t*)&frameBuffer[96];
-    uint16_t nstrings = *(uint16_t*)&frameBuffer[100];
-    uint16_t currentIndex = *(uint16_t*)&frameBuffer[102];
-    uint16_t readingCount = *(uint16_t*)&frameBuffer[104];
+    uint32_t frameCounter = *(uint32_t*)&frameBuffer[94];
+    uint16_t nstrings = *(uint16_t*)&frameBuffer[98];
+    uint16_t currentIndex = *(uint16_t*)&frameBuffer[100];
+    uint16_t readingCount = *(uint16_t*)&frameBuffer[102];
 
     // Display all fields with proper formatting and conversions
     char buffer[256];

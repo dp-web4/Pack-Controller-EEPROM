@@ -570,6 +570,7 @@ object MainForm: TMainForm
           Top = 180
           Width = 330
           Height = 350
+          Anchors = [akLeft, akTop, akBottom]
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clWindowText
           Font.Height = -11
@@ -585,6 +586,7 @@ object MainForm: TMainForm
           Top = 180
           Width = 458
           Height = 350
+          Anchors = [akLeft, akTop, akRight, akBottom]
           Font.Charset = DEFAULT_CHARSET
           Font.Color = clWindowText
           Font.Height = -11
