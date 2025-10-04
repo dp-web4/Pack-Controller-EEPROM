@@ -2176,10 +2176,13 @@ void __fastcall TMainForm::ExportCellsCheckClick(TObject *Sender) {
     if (ExportCellsCheck->Checked) {
         // Clear frames checkbox - mutually exclusive
         ExportFramesCheck->Checked = false;
+
+        // Start streaming export (cells mode generates filename automatically)
+        exportFrameMode = false;
+        StartCSVExport(false);  // Always overwrite for auto-generated filenames
     } else {
         StopCSVExport();
     }
-    // Note: Export is now started by Append/Overwrite buttons
 }
 
 //---------------------------------------------------------------------------
@@ -2199,13 +2202,13 @@ void __fastcall TMainForm::ExportFramesCheckClick(TObject *Sender) {
 void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
     (void)Sender;
 
-    // Determine which mode is enabled
-    if (!ExportCellsCheck->Checked && !ExportFramesCheck->Checked) {
-        ShowError("Please select either 'Export Cells' or 'Export Frames'");
-        return;
-    }
+    // Append/Overwrite buttons only in Frames tab, always use frame mode
+    exportFrameMode = true;
 
-    exportFrameMode = ExportFramesCheck->Checked;
+    // Enable the export checkbox
+    if (ExportFramesCheck) {
+        ExportFramesCheck->Checked = true;
+    }
 
     // Start export in append mode
     StartCSVExport(true);
@@ -2215,13 +2218,13 @@ void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
 void __fastcall TMainForm::ExportOverwriteButtonClick(TObject *Sender) {
     (void)Sender;
 
-    // Determine which mode is enabled
-    if (!ExportCellsCheck->Checked && !ExportFramesCheck->Checked) {
-        ShowError("Please select either 'Export Cells' or 'Export Frames'");
-        return;
-    }
+    // Append/Overwrite buttons only in Frames tab, always use frame mode
+    exportFrameMode = true;
 
-    exportFrameMode = ExportFramesCheck->Checked;
+    // Enable the export checkbox
+    if (ExportFramesCheck) {
+        ExportFramesCheck->Checked = true;
+    }
 
     // Start export in overwrite mode
     StartCSVExport(false);
@@ -2259,13 +2262,27 @@ void TMainForm::StartCSVExport(bool appendMode) {
         return;
     }
 
-    // Get filename from edit box
-    String filename = ExportFilenameEdit->Text.Trim();
-    if (filename.IsEmpty()) {
-        ShowError("Please enter a filename");
-        ExportCellsCheck->Checked = false;
-        ExportFramesCheck->Checked = false;
-        return;
+    // Get filename
+    String filename;
+    if (exportFrameMode) {
+        // Frame mode: use edit box
+        filename = ExportFilenameEdit->Text.Trim();
+        if (filename.IsEmpty()) {
+            ShowError("Please enter a filename");
+            ExportFramesCheck->Checked = false;
+            return;
+        }
+    } else {
+        // Cell streaming mode: auto-generate with timestamp
+        time_t rawtime;
+        struct tm* timeinfo;
+        char timeBuffer[50];
+        char filenameBuffer[100];
+        time(&rawtime);
+        timeinfo = localtime(&rawtime);
+        strftime(timeBuffer, sizeof(timeBuffer), "%Y%m%d_%H%M%S", timeinfo);
+        sprintf(filenameBuffer, "CellData_%08X_%s.csv", module->uniqueId, timeBuffer);
+        filename = String(filenameBuffer);
     }
 
     // Check if file exists for append mode
@@ -2305,9 +2322,9 @@ void TMainForm::StartCSVExport(bool appendMode) {
     exportEnabled = true;
     exportReceivedCount = 0;
 
-    // Update the filename label
-    if (ExportFileLabel) {
-        ExportFileLabel->Caption = filename;
+    // Update the filename label (cells tab only - streaming mode)
+    if (!exportFrameMode && ExportFilenameLabel) {
+        ExportFilenameLabel->Caption = "Exporting to: " + filename;
     }
 
     LogMessage("CSV export started: " + filename);
@@ -2325,9 +2342,9 @@ void TMainForm::StopCSVExport() {
 
     exportEnabled = false;
 
-    // Clear the filename label
-    if (ExportFileLabel) {
-        ExportFileLabel->Caption = "";
+    // Clear the filename label (cells tab)
+    if (ExportFilenameLabel) {
+        ExportFilenameLabel->Caption = "";
     }
 
     LogMessage("CSV export stopped");
@@ -2590,6 +2607,9 @@ void TMainForm::ProcessFrameTransferEnd(const uint8_t* data) {
             FrameNumberEdit->Text = "0x" + IntToHex((int)frameCounter, 8);
         }
 
+        // Display frame metadata
+        DisplayFrameMetadata();
+
         // Write to CSV
         WriteFrameToCSV();
     } else {
@@ -2628,19 +2648,18 @@ void TMainForm::WriteFrameToCSV() {
         return;
     }
 
-    // Parse key metadata fields
-    uint64_t* pTimestamp = (uint64_t*)&frameBuffer[6];
+    // Parse key metadata fields (same offsets as DisplayFrameMetadata)
+    // Offsets from gcc offsetof() calculation
+    uint64_t* pTimestamp = (uint64_t*)&frameBuffer[8];
     uint64_t timestamp = *pTimestamp;
 
-    // sg_u8CellCountExpected is at offset 18 (after moduleUniqueId at 14)
-    uint8_t cellCountExpected = frameBuffer[18];
+    uint8_t cellCountExpected = frameBuffer[23];
 
-    // Circular buffer fields are near end of metadata (offsets ~100-106)
-    // Based on FrameMetadata: frameCounter(100), nstrings(104), currentIndex(106), readingCount(108)
-    uint32_t* pFrameCounter = (uint32_t*)&frameBuffer[100];
-    uint16_t* pNstrings = (uint16_t*)&frameBuffer[104];
-    uint16_t* pCurrentIndex = (uint16_t*)&frameBuffer[106];
-    uint16_t* pReadingCount = (uint16_t*)&frameBuffer[108];
+    // Circular buffer fields
+    uint32_t* pFrameCounter = (uint32_t*)&frameBuffer[96];
+    uint16_t* pNstrings = (uint16_t*)&frameBuffer[100];
+    uint16_t* pCurrentIndex = (uint16_t*)&frameBuffer[102];
+    uint16_t* pReadingCount = (uint16_t*)&frameBuffer[104];
 
     uint16_t nstrings = *pNstrings;
     uint16_t readingCount = *pReadingCount;
@@ -2651,9 +2670,9 @@ void TMainForm::WriteFrameToCSV() {
         return;
     }
 
-    // FrameMetadata size is 128 bytes (sizeof includes padding to alignment)
-    // Cell data buffer starts at offset 128
-    const int METADATA_SIZE = 128;
+    // FrameMetadata size is 112 bytes (verified with offsetof)
+    // Cell data buffer starts at offset 112
+    const int METADATA_SIZE = 112;
     const int CELL_DATA_SIZE = 4;  // CellData: uint16_t voltage + int16_t temperature
     int bytesPerString = cellCountExpected * CELL_DATA_SIZE;
 
@@ -2692,6 +2711,191 @@ void TMainForm::WriteFrameToCSV() {
     LogMessage("Exported " + IntToStr(readingCount) + " string readings from frame " +
                IntToHex((int)*pFrameCounter, 8) + " to CSV");
     frameTransferState = FRAME_IDLE;
+}
+
+//---------------------------------------------------------------------------
+void TMainForm::DisplayFrameMetadata() {
+    if (!FrameMetadataMemo) return;
+
+    FrameMetadataMemo->Clear();
+
+    // Display hex dump of ALL 1024 bytes to see what we actually received
+    if (FrameHexMemo) {
+        FrameHexMemo->Clear();
+        FrameHexMemo->Lines->Add("Frame Buffer Hex Dump (all 1024 bytes):");
+        FrameHexMemo->Lines->Add("Looking for signature 0x7ADA77BA (little-endian of 0xBA77DA7A)");
+        FrameHexMemo->Lines->Add("");
+
+        for (int i = 0; i < 1024; i += 16) {
+            char offsetStr[10];
+            sprintf(offsetStr, "%04d: ", i);
+            String line = String(offsetStr);
+
+            // Hex bytes
+            for (int j = 0; j < 16 && (i + j) < 1024; j++) {
+                line += IntToHex(frameBuffer[i + j], 2) + " ";
+            }
+
+            FrameHexMemo->Lines->Add(line);
+        }
+    }
+
+    // Parse ALL frame metadata fields using offsets from framemetadata_template.txt
+    // All offsets verified with gcc offsetof()
+
+    // Basic frame identification
+    uint32_t validSig = *(uint32_t*)&frameBuffer[0];
+    uint16_t frameBytes = *(uint16_t*)&frameBuffer[4];
+    uint64_t timestamp = *(uint64_t*)&frameBuffer[8];
+    uint32_t moduleUniqueId = *(uint32_t*)&frameBuffer[16];
+
+    // Session statistics
+    uint8_t sg_u8WDTCount = frameBuffer[20];
+    uint8_t sg_u8CellCPUCountFewest = frameBuffer[21];
+    uint8_t sg_u8CellCPUCountMost = frameBuffer[22];
+    uint8_t sg_u8CellCountExpected = frameBuffer[23];
+
+    // Current measurements (in units of 0.02A relative to -655.36A)
+    uint16_t u16maxCurrent = *(uint16_t*)&frameBuffer[24];
+    uint16_t u16minCurrent = *(uint16_t*)&frameBuffer[26];
+    uint16_t u16avgCurrent = *(uint16_t*)&frameBuffer[28];
+    uint8_t sg_u8CurrentBufferIndex = frameBuffer[30];
+
+    // String voltage measurements
+    int32_t sg_i32VoltageStringMin = *(int32_t*)&frameBuffer[32];
+    int32_t sg_i32VoltageStringMax = *(int32_t*)&frameBuffer[36];
+    int16_t sg_i16VoltageStringPerADC = *(int16_t*)&frameBuffer[40];
+    bool bDischargeOn = frameBuffer[42];
+
+    // Communication statistics
+    uint16_t sg_u16CellCPUI2CErrors = *(uint16_t*)&frameBuffer[44];
+    uint8_t sg_u8CellFirstI2CError = frameBuffer[46];
+    uint16_t sg_u16BytesReceived = *(uint16_t*)&frameBuffer[48];
+    uint8_t sg_u8CellCPUCount = frameBuffer[50];
+    uint8_t sg_u8MCRXFramingErrors = frameBuffer[51];
+    uint8_t sg_u8LastCompleteCellCount = frameBuffer[52];
+
+    // Frame-specific measurements
+    uint16_t u16frameCurrent = *(uint16_t*)&frameBuffer[54];
+    int16_t sg_s16HighestCellTemp = *(int16_t*)&frameBuffer[56];
+    int16_t sg_s16LowestCellTemp = *(int16_t*)&frameBuffer[58];
+    int16_t sg_s16AverageCellTemp = *(int16_t*)&frameBuffer[60];
+
+    // Cell voltage statistics
+    uint16_t sg_u16HighestCellVoltage = *(uint16_t*)&frameBuffer[62];
+    uint16_t sg_u16LowestCellVoltage = *(uint16_t*)&frameBuffer[64];
+    uint16_t sg_u16AverageCellVoltage = *(uint16_t*)&frameBuffer[66];
+    uint32_t sg_u32CellVoltageTotal = *(uint32_t*)&frameBuffer[68];
+    int32_t sg_i32VoltageStringTotal = *(int32_t*)&frameBuffer[72];
+
+    // ADCReadings array at offset 76 (5 structs, 4 bytes each) - skip for now
+
+    // Frame counter and circular buffer
+    uint32_t frameCounter = *(uint32_t*)&frameBuffer[96];
+    uint16_t nstrings = *(uint16_t*)&frameBuffer[100];
+    uint16_t currentIndex = *(uint16_t*)&frameBuffer[102];
+    uint16_t readingCount = *(uint16_t*)&frameBuffer[104];
+
+    // Display all fields with proper formatting and conversions
+    char buffer[256];
+
+    FrameMetadataMemo->Lines->Add("=== FRAME IDENTIFICATION ===");
+    sprintf(buffer, "Valid Signature: 0x%08X %s", validSig,
+            (validSig == 0xBA77DA7A ? "(OK)" : "(INVALID)"));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Frame Bytes: %u", frameBytes);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Timestamp: %llu", timestamp);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Module Unique ID: 0x%08X", moduleUniqueId);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Frame Counter: 0x%08X (%u)", frameCounter, frameCounter);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== SESSION STATISTICS ===");
+    sprintf(buffer, "WDT Resets: %u", sg_u8WDTCount);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Cell CPU Count (Min): %u", sg_u8CellCPUCountFewest);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Cell CPU Count (Max): %u", sg_u8CellCPUCountMost);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Cell Count Expected: %u", sg_u8CellCountExpected);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== CURRENT MEASUREMENTS ===");
+    sprintf(buffer, "Max Current: %.2f A", (-655.36 + u16maxCurrent * 0.02));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Min Current: %.2f A", (-655.36 + u16minCurrent * 0.02));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Avg Current: %.2f A", (-655.36 + u16avgCurrent * 0.02));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Frame Current: %.2f A", (-655.36 + u16frameCurrent * 0.02));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Current Buffer Index: %u", sg_u8CurrentBufferIndex);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== VOLTAGE MEASUREMENTS ===");
+    sprintf(buffer, "String Voltage Min: %d mV", sg_i32VoltageStringMin);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "String Voltage Max: %d mV", sg_i32VoltageStringMax);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "String Voltage Per ADC: %d", sg_i16VoltageStringPerADC);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "String Voltage Total: %d (15mV units)", sg_i32VoltageStringTotal);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Discharge On: %s", (bDischargeOn ? "Yes" : "No"));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== CELL STATISTICS ===");
+    sprintf(buffer, "Highest Cell Voltage: %u mV", sg_u16HighestCellVoltage);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Lowest Cell Voltage: %u mV", sg_u16LowestCellVoltage);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Average Cell Voltage: %u mV", sg_u16AverageCellVoltage);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Cell Voltage Total: %u mV", sg_u32CellVoltageTotal);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Highest Cell Temp: %.1f C", (sg_s16HighestCellTemp / 10.0));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Lowest Cell Temp: %.1f C", (sg_s16LowestCellTemp / 10.0));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Average Cell Temp: %.1f C", (sg_s16AverageCellTemp / 10.0));
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== COMMUNICATION STATUS ===");
+    sprintf(buffer, "Cell I2C Errors: %u", sg_u16CellCPUI2CErrors);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "First I2C Error Cell: %u", sg_u8CellFirstI2CError);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Bytes Received: %u", sg_u16BytesReceived);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Cell CPU Count (Frame): %u", sg_u8CellCPUCount);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "MC RX Framing Errors: %u", sg_u8MCRXFramingErrors);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Last Complete Cell Count: %u", sg_u8LastCompleteCellCount);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== CIRCULAR BUFFER ===");
+    sprintf(buffer, "Circular Buffer Capacity: %u readings", nstrings);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Current Index: %u", currentIndex);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "Reading Count: %u", readingCount);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    if (readingCount > 0) {
+        FrameMetadataMemo->Lines->Add("");
+        sprintf(buffer, "Contains %u string reading(s), each with %u cell measurements",
+                readingCount, sg_u8CellCountExpected);
+        FrameMetadataMemo->Lines->Add(String(buffer));
+    }
 }
 
 //---------------------------------------------------------------------------

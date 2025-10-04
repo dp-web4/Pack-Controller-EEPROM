@@ -436,120 +436,169 @@ object MainForm: TMainForm
           TabOrder = 1
           OnClick = ExportCellsCheckClick
         end
-        object ExportFramesCheck: TCheckBox
-          Left = 480
-          Top = 16
-          Width = 110
-          Height = 17
-          Caption = 'Export Frames'
-          Checked = False
-          State = cbUnchecked
-          TabOrder = 2
-          OnClick = ExportFramesCheckClick
-        end
-        object ExportFileLabel: TLabel
+        object ExportFilenameLabel: TLabel
           Left = 376
-          Top = 36
+          Top = 40
+          Width = 300
+          Height = 13
+          Caption = ''
+        end
+      end
+      object FramesTab: TTabSheet
+        Caption = 'Frames'
+        ImageIndex = 2
+        object ExportFileLabel: TLabel
+          Left = 16
+          Top = 16
           Width = 50
           Height = 13
           Caption = 'Filename:'
         end
-        object ExportFilenameEdit: TEdit
-          Left = 432
-          Top = 33
-          Width = 300
-          Height = 21
-          TabOrder = 3
-          Text = 'cell_export.csv'
-        end
-        object ExportAppendButton: TButton
-          Left = 432
-          Top = 57
-          Width = 70
-          Height = 21
-          Caption = 'Append'
-          TabOrder = 4
-          OnClick = ExportAppendButtonClick
-        end
-        object ExportOverwriteButton: TButton
-          Left = 507
-          Top = 57
-          Width = 70
-          Height = 21
-          Caption = 'Overwrite'
-          TabOrder = 5
-          OnClick = ExportOverwriteButtonClick
-        end
-        object GetFrameButton: TButton
-          Left = 376
-          Top = 60
-          Width = 100
-          Height = 25
-          Caption = 'Get Frame'
-          TabOrder = 2
-          OnClick = GetFrameButtonClick
-        end
-        object FrameNumberEdit: TEdit
-          Left = 482
-          Top = 60
-          Width = 100
-          Height = 21
-          TabOrder = 3
-          Text = '0xFFFFFFFF'
-        end
-        object FrameNumberDecButton: TButton
-          Left = 588
-          Top = 60
-          Width = 20
-          Height = 21
-          Caption = '<'
-          TabOrder = 4
-          OnClick = FrameNumberDecButtonClick
-        end
-        object FrameNumberIncButton: TButton
-          Left = 608
-          Top = 60
-          Width = 20
-          Height = 21
-          Caption = '>'
-          TabOrder = 5
-          OnClick = FrameNumberIncButtonClick
-        end
         object FrameNumberLabel: TLabel
-          Left = 482
-          Top = 86
+          Left = 16
+          Top = 66
           Width = 40
           Height = 13
           Caption = 'Frame #'
         end
-        object FrameNumberCurrentButton: TButton
-          Left = 528
-          Top = 82
-          Width = 50
-          Height = 21
-          Caption = 'Current'
-          TabOrder = 6
-          OnClick = FrameNumberCurrentButtonClick
-        end
         object FrameBytesLabel: TLabel
-          Left = 376
-          Top = 90
+          Left = 16
+          Top = 116
           Width = 100
           Height = 13
           Caption = 'Bytes: 0/1024'
         end
         object FrameCRCLabel: TLabel
-          Left = 376
-          Top = 110
+          Left = 16
+          Top = 136
           Width = 200
           Height = 13
           Caption = 'CRC: Not started'
           Font.Color = clGray
         end
+        object FrameMetadataLabel: TLabel
+          Left = 16
+          Top = 160
+          Width = 85
+          Height = 13
+          Caption = 'Frame Metadata:'
+          Font.Style = [fsBold]
+        end
+        object ExportFilenameEdit: TEdit
+          Left = 72
+          Top = 13
+          Width = 300
+          Height = 21
+          TabOrder = 0
+          Text = 'cell_export.csv'
+        end
+        object ExportAppendButton: TButton
+          Left = 378
+          Top = 13
+          Width = 70
+          Height = 21
+          Caption = 'Append'
+          TabOrder = 1
+          OnClick = ExportAppendButtonClick
+        end
+        object ExportOverwriteButton: TButton
+          Left = 453
+          Top = 13
+          Width = 70
+          Height = 21
+          Caption = 'Overwrite'
+          TabOrder = 2
+          OnClick = ExportOverwriteButtonClick
+        end
+        object ExportFramesCheck: TCheckBox
+          Left = 530
+          Top = 15
+          Width = 110
+          Height = 17
+          Caption = 'Export Frames'
+          Checked = False
+          State = cbUnchecked
+          TabOrder = 3
+          OnClick = ExportFramesCheckClick
+        end
+        object FrameNumberEdit: TEdit
+          Left = 62
+          Top = 63
+          Width = 100
+          Height = 21
+          TabOrder = 4
+          Text = '0xFFFFFFFF'
+        end
+        object FrameNumberDecButton: TButton
+          Left = 168
+          Top = 63
+          Width = 20
+          Height = 21
+          Caption = '<'
+          TabOrder = 5
+          OnClick = FrameNumberDecButtonClick
+        end
+        object FrameNumberIncButton: TButton
+          Left = 188
+          Top = 63
+          Width = 20
+          Height = 21
+          Caption = '>'
+          TabOrder = 6
+          OnClick = FrameNumberIncButtonClick
+        end
+        object FrameNumberCurrentButton: TButton
+          Left = 214
+          Top = 63
+          Width = 50
+          Height = 21
+          Caption = 'Current'
+          TabOrder = 7
+          OnClick = FrameNumberCurrentButtonClick
+        end
+        object GetFrameButton: TButton
+          Left = 16
+          Top = 90
+          Width = 100
+          Height = 21
+          Caption = 'Get Frame'
+          TabOrder = 8
+          OnClick = GetFrameButtonClick
+        end
+        object FrameMetadataMemo: TMemo
+          Left = 16
+          Top = 180
+          Width = 330
+          Height = 350
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -11
+          Font.Name = 'Courier New'
+          Font.Style = []
+          ParentFont = False
+          ReadOnly = True
+          ScrollBars = ssVertical
+          TabOrder = 9
+        end
+        object FrameHexMemo: TMemo
+          Left = 360
+          Top = 180
+          Width = 458
+          Height = 350
+          Font.Charset = DEFAULT_CHARSET
+          Font.Color = clWindowText
+          Font.Height = -11
+          Font.Name = 'Courier New'
+          Font.Style = []
+          ParentFont = False
+          ReadOnly = True
+          ScrollBars = ssVertical
+          TabOrder = 10
+        end
       end
       object HistoryTab: TTabSheet
         Caption = 'History'
-        ImageIndex = 2
+        ImageIndex = 3
         object HistoryMemo: TMemo
           Left = 0
           Top = 0
@@ -594,7 +643,7 @@ object MainForm: TMainForm
       end
       object Web4Tab: TTabSheet
         Caption = 'Web4'
-        ImageIndex = 3
+        ImageIndex = 4
         object Web4Group: TGroupBox
           Left = 16
           Top = 16

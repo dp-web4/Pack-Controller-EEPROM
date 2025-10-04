@@ -71,6 +71,7 @@ __published:	// IDE-managed Components
     TPageControl *DetailsPageControl;
     TTabSheet *StatusTab;
     TTabSheet *CellsTab;
+    TTabSheet *FramesTab;
     TTabSheet *HistoryTab;
     TTabSheet *Web4Tab;
     
@@ -86,19 +87,25 @@ __published:	// IDE-managed Components
     TStringGrid *CellGrid;
     // TChart *CellVoltageChart;  // Commented out - requires TeeChart component
     TCheckBox *ExportCellsCheck;
-    TCheckBox *ExportFramesCheck;
-    TLabel *ExportFileLabel;
-    TEdit *ExportFilenameEdit;
-    TButton *ExportAppendButton;
-    TButton *ExportOverwriteButton;
+    TLabel *ExportFilenameLabel;
+
+    // Frames tab controls
     TButton *GetFrameButton;
     TEdit *FrameNumberEdit;
     TLabel *FrameNumberLabel;
     TLabel *FrameBytesLabel;
     TLabel *FrameCRCLabel;
+    TLabel *FrameMetadataLabel;
+    TMemo *FrameMetadataMemo;
+    TMemo *FrameHexMemo;
     TButton *FrameNumberDecButton;
     TButton *FrameNumberIncButton;
     TButton *FrameNumberCurrentButton;
+    TCheckBox *ExportFramesCheck;
+    TLabel *ExportFileLabel;
+    TEdit *ExportFilenameEdit;
+    TButton *ExportAppendButton;
+    TButton *ExportOverwriteButton;
     
     // History tab controls
     TMemo *HistoryMemo;
@@ -256,6 +263,7 @@ private:	// User declarations
     void ProcessFrameTransferData(const uint8_t* data, uint16_t sequenceNum);
     void ProcessFrameTransferEnd(const uint8_t* data);
     void WriteFrameToCSV();
+    void DisplayFrameMetadata();
     uint32_t CalculateCRC32(const uint8_t* data, uint16_t length);
 
     // UI update functions
