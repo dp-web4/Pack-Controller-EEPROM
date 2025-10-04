@@ -2627,6 +2627,73 @@ void TMainForm::ProcessFrameTransferEnd(const uint8_t* data) {
 }
 
 //---------------------------------------------------------------------------
+// Helper functions to extract values from unaligned buffer (AVR has no padding)
+static inline uint16_t ReadUint16LE(const uint8_t* buf, int offset) {
+    return buf[offset] | (buf[offset + 1] << 8);
+}
+
+static inline int16_t ReadInt16LE(const uint8_t* buf, int offset) {
+    return (int16_t)(buf[offset] | (buf[offset + 1] << 8));
+}
+
+static inline uint32_t ReadUint32LE(const uint8_t* buf, int offset) {
+    return buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24);
+}
+
+static inline int32_t ReadInt32LE(const uint8_t* buf, int offset) {
+    return (int32_t)(buf[offset] | (buf[offset + 1] << 8) | (buf[offset + 2] << 16) | (buf[offset + 3] << 24));
+}
+
+static inline uint64_t ReadUint64LE(const uint8_t* buf, int offset) {
+    return (uint64_t)buf[offset] | ((uint64_t)buf[offset + 1] << 8) | ((uint64_t)buf[offset + 2] << 16) |
+           ((uint64_t)buf[offset + 3] << 24) | ((uint64_t)buf[offset + 4] << 32) | ((uint64_t)buf[offset + 5] << 40) |
+           ((uint64_t)buf[offset + 6] << 48) | ((uint64_t)buf[offset + 7] << 56);
+}
+
+// Conversion functions matching ModuleCPU
+static inline float ConvertCurrent(uint16_t rawValue) {
+    return -655.36f + (rawValue * 0.02f);
+}
+
+static inline float ConvertTemperature(int16_t rawValue) {
+    // Temperature fractional lookup table (from ModuleCPU)
+    static const uint8_t fractionalLookup[] = {
+        0, 6, 12, 18, 25, 31, 37, 43, 50, 56, 62, 68, 75, 81, 87, 93
+    };
+
+    const int16_t TEMPERATURE_BASE = 5535;  // 55.35°C (in 100ths)
+    const int16_t TEMPERATURE_INVALID = 0x7FFF;
+
+    if (rawValue == TEMPERATURE_INVALID) {
+        return 0.0f;  // Invalid temperature
+    }
+
+    // Extract fractional bits (bits 0-3)
+    uint8_t fractional = (uint8_t)(rawValue & 0x0F);
+
+    int16_t temp = rawValue;
+
+    // Check sign bit (bit 12) and handle sign extension
+    if (temp & (1 << 12)) {
+        temp |= 0xF000;  // Sign extend for negative temps
+    } else {
+        temp &= 0x0FFF;  // Clear upper bits (including I2C OK bit)
+    }
+
+    // Get whole degrees by shifting right 4 bits
+    temp >>= 4;
+
+    // Scale to 100ths of degrees C and add fractional component
+    temp = (temp * 100) + (int16_t)fractionalLookup[fractional];
+
+    // Add base offset
+    temp += TEMPERATURE_BASE;
+
+    // Convert to float in degrees C (divide by 100)
+    return temp / 100.0f;
+}
+
+//---------------------------------------------------------------------------
 void TMainForm::WriteFrameToCSV() {
     // Only process if export frames mode is enabled
     if (!exportFrameMode || csvFile == NULL) {
@@ -2648,21 +2715,15 @@ void TMainForm::WriteFrameToCSV() {
         return;
     }
 
-    // Parse key metadata fields (same offsets as DisplayFrameMetadata)
-    // AVR compiler offsets - no padding after frameBytes
-    uint64_t* pTimestamp = (uint64_t*)&frameBuffer[6];
-    uint64_t timestamp = *pTimestamp;
-
+    // Parse key metadata fields using unaligned reads (NO PADDING on AVR)
+    uint64_t timestamp = ReadUint64LE(frameBuffer, 6);
     uint8_t cellCountExpected = frameBuffer[21];
 
     // Circular buffer fields
-    uint32_t* pFrameCounter = (uint32_t*)&frameBuffer[94];
-    uint16_t* pNstrings = (uint16_t*)&frameBuffer[98];
-    uint16_t* pCurrentIndex = (uint16_t*)&frameBuffer[100];
-    uint16_t* pReadingCount = (uint16_t*)&frameBuffer[102];
-
-    uint16_t nstrings = *pNstrings;
-    uint16_t readingCount = *pReadingCount;
+    uint32_t frameCounter = ReadUint32LE(frameBuffer, 85);
+    uint16_t nstrings = ReadUint16LE(frameBuffer, 89);
+    uint16_t currentIndex = ReadUint16LE(frameBuffer, 91);
+    uint16_t readingCount = ReadUint16LE(frameBuffer, 93);
 
     if (readingCount == 0 || cellCountExpected == 0) {
         LogMessage("No readings in frame (count=" + IntToStr(readingCount) + ", cells=" + IntToStr(cellCountExpected) + "), skipping export");
@@ -2670,9 +2731,9 @@ void TMainForm::WriteFrameToCSV() {
         return;
     }
 
-    // FrameMetadata size is 110 bytes on AVR (2 bytes less due to no padding)
-    // Cell data buffer starts at offset 110
-    const int METADATA_SIZE = 110;
+    // FrameMetadata size on AVR (no padding): 95 bytes
+    // Cell data buffer starts at offset 95
+    const int METADATA_SIZE = 95;
     const int CELL_DATA_SIZE = 4;  // CellData: uint16_t voltage + int16_t temperature
     int bytesPerString = cellCountExpected * CELL_DATA_SIZE;
 
@@ -2709,7 +2770,7 @@ void TMainForm::WriteFrameToCSV() {
 
     csvFile->flush();
     LogMessage("Exported " + IntToStr(readingCount) + " string readings from frame " +
-               IntToHex((int)*pFrameCounter, 8) + " to CSV");
+               IntToHex((int)frameCounter, 8) + " to CSV");
     frameTransferState = FRAME_IDLE;
 }
 
@@ -2740,14 +2801,14 @@ void TMainForm::DisplayFrameMetadata() {
         }
     }
 
-    // Parse ALL frame metadata fields using AVR compiler offsets
-    // AVR doesn't add padding after frameBytes - uint64_t at offset 6, not 8!
+    // Parse ALL frame metadata fields - NO PADDING on AVR!
+    // Manually calculated offsets for packed struct
 
     // Basic frame identification
-    uint32_t validSig = *(uint32_t*)&frameBuffer[0];
-    uint16_t frameBytes = *(uint16_t*)&frameBuffer[4];
-    uint64_t timestamp = *(uint64_t*)&frameBuffer[6];       // AVR: no padding
-    uint32_t moduleUniqueId = *(uint32_t*)&frameBuffer[14]; // AVR: offset 14
+    uint32_t validSig = ReadUint32LE(frameBuffer, 0);
+    uint16_t frameBytes = ReadUint16LE(frameBuffer, 4);
+    uint64_t timestamp = ReadUint64LE(frameBuffer, 6);
+    uint32_t moduleUniqueId = ReadUint32LE(frameBuffer, 14);
 
     // Session statistics
     uint8_t sg_u8WDTCount = frameBuffer[18];
@@ -2755,46 +2816,46 @@ void TMainForm::DisplayFrameMetadata() {
     uint8_t sg_u8CellCPUCountMost = frameBuffer[20];
     uint8_t sg_u8CellCountExpected = frameBuffer[21];
 
-    // Current measurements (in units of 0.02A relative to -655.36A)
-    uint16_t u16maxCurrent = *(uint16_t*)&frameBuffer[22];
-    uint16_t u16minCurrent = *(uint16_t*)&frameBuffer[24];
-    uint16_t u16avgCurrent = *(uint16_t*)&frameBuffer[26];
+    // Current measurements
+    uint16_t u16maxCurrent = ReadUint16LE(frameBuffer, 22);
+    uint16_t u16minCurrent = ReadUint16LE(frameBuffer, 24);
+    uint16_t u16avgCurrent = ReadUint16LE(frameBuffer, 26);
     uint8_t sg_u8CurrentBufferIndex = frameBuffer[28];
 
     // String voltage measurements
-    int32_t sg_i32VoltageStringMin = *(int32_t*)&frameBuffer[30];
-    int32_t sg_i32VoltageStringMax = *(int32_t*)&frameBuffer[34];
-    int16_t sg_i16VoltageStringPerADC = *(int16_t*)&frameBuffer[38];
-    bool bDischargeOn = frameBuffer[40];
+    int32_t sg_i32VoltageStringMin = ReadInt32LE(frameBuffer, 29);
+    int32_t sg_i32VoltageStringMax = ReadInt32LE(frameBuffer, 33);
+    int16_t sg_i16VoltageStringPerADC = ReadInt16LE(frameBuffer, 37);
+    bool bDischargeOn = frameBuffer[39];
 
     // Communication statistics
-    uint16_t sg_u16CellCPUI2CErrors = *(uint16_t*)&frameBuffer[42];
-    uint8_t sg_u8CellFirstI2CError = frameBuffer[44];
-    uint16_t sg_u16BytesReceived = *(uint16_t*)&frameBuffer[46];
-    uint8_t sg_u8CellCPUCount = frameBuffer[48];
-    uint8_t sg_u8MCRXFramingErrors = frameBuffer[49];
-    uint8_t sg_u8LastCompleteCellCount = frameBuffer[50];
+    uint16_t sg_u16CellCPUI2CErrors = ReadUint16LE(frameBuffer, 40);
+    uint8_t sg_u8CellFirstI2CError = frameBuffer[42];
+    uint16_t sg_u16BytesReceived = ReadUint16LE(frameBuffer, 43);
+    uint8_t sg_u8CellCPUCount = frameBuffer[45];
+    uint8_t sg_u8MCRXFramingErrors = frameBuffer[46];
+    uint8_t sg_u8LastCompleteCellCount = frameBuffer[47];
 
     // Frame-specific measurements
-    uint16_t u16frameCurrent = *(uint16_t*)&frameBuffer[52];
-    int16_t sg_s16HighestCellTemp = *(int16_t*)&frameBuffer[54];
-    int16_t sg_s16LowestCellTemp = *(int16_t*)&frameBuffer[56];
-    int16_t sg_s16AverageCellTemp = *(int16_t*)&frameBuffer[58];
+    uint16_t u16frameCurrent = ReadUint16LE(frameBuffer, 48);
+    int16_t sg_s16HighestCellTemp = ReadInt16LE(frameBuffer, 50);
+    int16_t sg_s16LowestCellTemp = ReadInt16LE(frameBuffer, 52);
+    int16_t sg_s16AverageCellTemp = ReadInt16LE(frameBuffer, 54);
 
     // Cell voltage statistics
-    uint16_t sg_u16HighestCellVoltage = *(uint16_t*)&frameBuffer[60];
-    uint16_t sg_u16LowestCellVoltage = *(uint16_t*)&frameBuffer[62];
-    uint16_t sg_u16AverageCellVoltage = *(uint16_t*)&frameBuffer[64];
-    uint32_t sg_u32CellVoltageTotal = *(uint32_t*)&frameBuffer[66];
-    int32_t sg_i32VoltageStringTotal = *(int32_t*)&frameBuffer[70];
+    uint16_t sg_u16HighestCellVoltage = ReadUint16LE(frameBuffer, 56);
+    uint16_t sg_u16LowestCellVoltage = ReadUint16LE(frameBuffer, 58);
+    uint16_t sg_u16AverageCellVoltage = ReadUint16LE(frameBuffer, 60);
+    uint32_t sg_u32CellVoltageTotal = ReadUint32LE(frameBuffer, 62);
+    int32_t sg_i32VoltageStringTotal = ReadInt32LE(frameBuffer, 66);
 
-    // ADCReadings array at offset 74 (5 structs, 4 bytes each) - skip for now
+    // ADCReadings array at offset 70 (5 * 3 bytes = 15 bytes) - skip for now
 
     // Frame counter and circular buffer
-    uint32_t frameCounter = *(uint32_t*)&frameBuffer[94];
-    uint16_t nstrings = *(uint16_t*)&frameBuffer[98];
-    uint16_t currentIndex = *(uint16_t*)&frameBuffer[100];
-    uint16_t readingCount = *(uint16_t*)&frameBuffer[102];
+    uint32_t frameCounter = ReadUint32LE(frameBuffer, 85);
+    uint16_t nstrings = ReadUint16LE(frameBuffer, 89);
+    uint16_t currentIndex = ReadUint16LE(frameBuffer, 91);
+    uint16_t readingCount = ReadUint16LE(frameBuffer, 93);
 
     // Display all fields with proper formatting and conversions
     char buffer[256];
@@ -2825,13 +2886,13 @@ void TMainForm::DisplayFrameMetadata() {
 
     FrameMetadataMemo->Lines->Add("");
     FrameMetadataMemo->Lines->Add("=== CURRENT MEASUREMENTS ===");
-    sprintf(buffer, "Max Current: %.2f A", (-655.36 + u16maxCurrent * 0.02));
+    sprintf(buffer, "Max Current: %.2f A", ConvertCurrent(u16maxCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Min Current: %.2f A", (-655.36 + u16minCurrent * 0.02));
+    sprintf(buffer, "Min Current: %.2f A", ConvertCurrent(u16minCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Avg Current: %.2f A", (-655.36 + u16avgCurrent * 0.02));
+    sprintf(buffer, "Avg Current: %.2f A", ConvertCurrent(u16avgCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Frame Current: %.2f A", (-655.36 + u16frameCurrent * 0.02));
+    sprintf(buffer, "Frame Current: %.2f A", ConvertCurrent(u16frameCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Current Buffer Index: %u", sg_u8CurrentBufferIndex);
     FrameMetadataMemo->Lines->Add(String(buffer));
@@ -2859,11 +2920,11 @@ void TMainForm::DisplayFrameMetadata() {
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Cell Voltage Total: %u mV", sg_u32CellVoltageTotal);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Highest Cell Temp: %.1f C", (sg_s16HighestCellTemp / 10.0));
+    sprintf(buffer, "Highest Cell Temp: %.1f C", ConvertTemperature(sg_s16HighestCellTemp));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Lowest Cell Temp: %.1f C", (sg_s16LowestCellTemp / 10.0));
+    sprintf(buffer, "Lowest Cell Temp: %.1f C", ConvertTemperature(sg_s16LowestCellTemp));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Average Cell Temp: %.1f C", (sg_s16AverageCellTemp / 10.0));
+    sprintf(buffer, "Average Cell Temp: %.1f C", ConvertTemperature(sg_s16AverageCellTemp));
     FrameMetadataMemo->Lines->Add(String(buffer));
 
     FrameMetadataMemo->Lines->Add("");
