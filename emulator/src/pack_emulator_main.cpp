@@ -2656,41 +2656,18 @@ static inline float ConvertCurrent(uint16_t rawValue) {
 }
 
 static inline float ConvertTemperature(int16_t rawValue) {
-    // Temperature fractional lookup table (from ModuleCPU)
-    static const uint8_t fractionalLookup[] = {
-        0, 6, 12, 18, 25, 31, 37, 43, 50, 56, 62, 68, 75, 81, 87, 93
-    };
-
-    const int16_t TEMPERATURE_BASE = 5535;  // 55.35°C (in 100ths)
+    // NOTE: Temperature values in frame are ALREADY converted by ModuleCPU
+    // (via CellDataConvertTemperature) and stored in 100ths of degrees C
+    // with TEMPERATURE_BASE offset applied.
+    const int16_t TEMPERATURE_BASE = 5535;  // 55.35°C offset (in 100ths)
     const int16_t TEMPERATURE_INVALID = 0x7FFF;
 
     if (rawValue == TEMPERATURE_INVALID) {
         return 0.0f;  // Invalid temperature
     }
 
-    // Extract fractional bits (bits 0-3)
-    uint8_t fractional = (uint8_t)(rawValue & 0x0F);
-
-    int16_t temp = rawValue;
-
-    // Check sign bit (bit 12) and handle sign extension
-    if (temp & (1 << 12)) {
-        temp |= 0xF000;  // Sign extend for negative temps
-    } else {
-        temp &= 0x0FFF;  // Clear upper bits (including I2C OK bit)
-    }
-
-    // Get whole degrees by shifting right 4 bits
-    temp >>= 4;
-
-    // Scale to 100ths of degrees C and add fractional component
-    temp = (temp * 100) + (int16_t)fractionalLookup[fractional];
-
-    // Add base offset
-    temp += TEMPERATURE_BASE;
-
-    // Convert to float in degrees C (divide by 100)
-    return temp / 100.0f;
+    // Subtract base offset and convert from 100ths of degrees C to degrees C
+    return (rawValue - TEMPERATURE_BASE) / 100.0f;
 }
 
 //---------------------------------------------------------------------------
@@ -2899,26 +2876,26 @@ void TMainForm::DisplayFrameMetadata() {
 
     FrameMetadataMemo->Lines->Add("");
     FrameMetadataMemo->Lines->Add("=== VOLTAGE MEASUREMENTS ===");
-    sprintf(buffer, "String Voltage Min: %d mV", sg_i32VoltageStringMin);
+    sprintf(buffer, "String Voltage Min: %.3f V", sg_i32VoltageStringMin / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Voltage Max: %d mV", sg_i32VoltageStringMax);
+    sprintf(buffer, "String Voltage Max: %.3f V", sg_i32VoltageStringMax / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Voltage Per ADC: %d", sg_i16VoltageStringPerADC);
+    sprintf(buffer, "String Voltage Per ADC: %.3f mV", sg_i16VoltageStringPerADC / 128.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Voltage Total: %d (15mV units)", sg_i32VoltageStringTotal);
+    sprintf(buffer, "String Voltage Total: %.3f V", (sg_i32VoltageStringTotal * 15) / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Discharge On: %s", (bDischargeOn ? "Yes" : "No"));
     FrameMetadataMemo->Lines->Add(String(buffer));
 
     FrameMetadataMemo->Lines->Add("");
     FrameMetadataMemo->Lines->Add("=== CELL STATISTICS ===");
-    sprintf(buffer, "Highest Cell Voltage: %u mV", sg_u16HighestCellVoltage);
+    sprintf(buffer, "Highest Cell Voltage: %.3f V", sg_u16HighestCellVoltage / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Lowest Cell Voltage: %u mV", sg_u16LowestCellVoltage);
+    sprintf(buffer, "Lowest Cell Voltage: %.3f V", sg_u16LowestCellVoltage / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Average Cell Voltage: %u mV", sg_u16AverageCellVoltage);
+    sprintf(buffer, "Average Cell Voltage: %.3f V", sg_u16AverageCellVoltage / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Cell Voltage Total: %u mV", sg_u32CellVoltageTotal);
+    sprintf(buffer, "Cell Voltage Total: %.3f V", sg_u32CellVoltageTotal / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Highest Cell Temp: %.1f C", ConvertTemperature(sg_s16HighestCellTemp));
     FrameMetadataMemo->Lines->Add(String(buffer));
