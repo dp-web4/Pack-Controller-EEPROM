@@ -2863,26 +2863,29 @@ void TMainForm::DisplayFrameMetadata() {
 
     FrameMetadataMemo->Lines->Add("");
     FrameMetadataMemo->Lines->Add("=== CURRENT MEASUREMENTS ===");
-    sprintf(buffer, "Max Current: %.2f A", ConvertCurrent(u16maxCurrent));
+    sprintf(buffer, "Max Session Current: %.2f A", ConvertCurrent(u16maxCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Min Current: %.2f A", ConvertCurrent(u16minCurrent));
+    sprintf(buffer, "Min Session Current: %.2f A", ConvertCurrent(u16minCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Avg Current: %.2f A", ConvertCurrent(u16avgCurrent));
+    sprintf(buffer, "Avg Session Current: %.2f A (not implemented)", ConvertCurrent(u16avgCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Frame Current: %.2f A", ConvertCurrent(u16frameCurrent));
+    sprintf(buffer, "String Current: %.2f A", ConvertCurrent(u16frameCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Current Buffer Index: %u", sg_u8CurrentBufferIndex);
     FrameMetadataMemo->Lines->Add(String(buffer));
 
     FrameMetadataMemo->Lines->Add("");
+    FrameMetadataMemo->Lines->Add("=== ADC CALIBRATION ===");
+    sprintf(buffer, "ADC Range Floor: %.3f V (2.25V/cell)", sg_i32VoltageStringMin / 1000.0f);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "ADC Range Ceiling: %.3f V (4.5V/cell)", sg_i32VoltageStringMax / 1000.0f);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+    sprintf(buffer, "ADC Scaling Factor: %.3f mV/count", sg_i16VoltageStringPerADC / 128.0f);
+    FrameMetadataMemo->Lines->Add(String(buffer));
+
+    FrameMetadataMemo->Lines->Add("");
     FrameMetadataMemo->Lines->Add("=== VOLTAGE MEASUREMENTS ===");
-    sprintf(buffer, "String Voltage Min: %.3f V", sg_i32VoltageStringMin / 1000.0f);
-    FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Voltage Max: %.3f V", sg_i32VoltageStringMax / 1000.0f);
-    FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Voltage Per ADC: %.3f mV", sg_i16VoltageStringPerADC / 128.0f);
-    FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Voltage Total: %.3f V", (sg_i32VoltageStringTotal * 15) / 1000.0f);
+    sprintf(buffer, "String Voltage (ADC): %.3f V", (sg_i32VoltageStringTotal * 15) / 1000.0f);
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Discharge On: %s", (bDischargeOn ? "Yes" : "No"));
     FrameMetadataMemo->Lines->Add(String(buffer));
