@@ -2867,9 +2867,9 @@ void TMainForm::DisplayFrameMetadata() {
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Min Session Current: %.2f A", ConvertCurrent(u16minCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "Avg Session Current: %.2f A (not implemented)", ConvertCurrent(u16avgCurrent));
+    sprintf(buffer, "Avg Frame Current: %.2f A", ConvertCurrent(u16avgCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
-    sprintf(buffer, "String Current: %.2f A", ConvertCurrent(u16frameCurrent));
+    sprintf(buffer, "Peak Frame Current: %.2f A", ConvertCurrent(u16frameCurrent));
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Current Buffer Index: %u", sg_u8CurrentBufferIndex);
     FrameMetadataMemo->Lines->Add(String(buffer));

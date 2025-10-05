@@ -38,14 +38,16 @@ sg_u8CellCountExpected (offset 21, uint8_t)
   Display: "Cell Count Expected: %u", value
 
 u16maxCurrent (offset 22, uint16_t)
-  Comment: session current is in units of 0.02A relative to CURRENT_FLOOR -655.36
-  Display: "Max Current: %.2f A", (-655.36 + value * 0.02)
+  Comment: session max - highest current seen across all frames in session
+  Display: "Max Session Current: %.2f A", (-655.36 + value * 0.02)
 
 u16minCurrent (offset 24, uint16_t)
-  Display: "Min Current: %.2f A", (-655.36 + value * 0.02)
+  Comment: session min - lowest current seen across all frames in session
+  Display: "Min Session Current: %.2f A", (-655.36 + value * 0.02)
 
 u16avgCurrent (offset 26, uint16_t)
-  Display: "Avg Current: %.2f A", (-655.36 + value * 0.02)
+  Comment: frame average - calculated from circular buffer of string readings
+  Display: "Avg Frame Current: %.2f A", (-655.36 + value * 0.02)
 
 sg_u8CurrentBufferIndex (offset 28, uint8_t)
   Display: "Current Buffer Index: %u", value
@@ -86,7 +88,8 @@ sg_u8LastCompleteCellCount (offset 50, uint8_t)
   Display: "Last Complete Cell Count: %u", value
 
 u16frameCurrent (offset 52, uint16_t)
-  Display: "Frame Current: %.2f A", (-655.36 + value * 0.02)
+  Comment: Peak current in dominant direction (highest if charging, lowest if discharging)
+  Display: "Peak Frame Current: %.2f A", (-655.36 + value * 0.02)
 
 sg_s16HighestCellTemp (offset 54, int16_t)
   Display: "Highest Cell Temp: %.1f C", (value / 10.0)
