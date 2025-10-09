@@ -510,17 +510,6 @@ object MainForm: TMainForm
           TabOrder = 2
           OnClick = ExportOverwriteButtonClick
         end
-        object ExportFramesCheck: TCheckBox
-          Left = 530
-          Top = 15
-          Width = 110
-          Height = 17
-          Caption = 'Export Frames'
-          Checked = False
-          State = cbUnchecked
-          TabOrder = 3
-          OnClick = ExportFramesCheckClick
-        end
         object FrameNumberEdit: TEdit
           Left = 62
           Top = 63

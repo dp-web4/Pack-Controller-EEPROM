@@ -93,10 +93,6 @@ void __fastcall TMainForm::FormCreate(TObject *Sender) {
         ExportCellsCheck->OnClick = ExportCellsCheckClick;
         ExportCellsCheck->Checked = false;  // Default to off
     }
-    if (ExportFramesCheck) {
-        ExportFramesCheck->OnClick = ExportFramesCheckClick;
-        ExportFramesCheck->Checked = false;  // Default to off
-    }
 
     // Initialize frame transfer state
     frameTransferState = FRAME_IDLE;
@@ -2174,9 +2170,6 @@ void __fastcall TMainForm::ExportCellsCheckClick(TObject *Sender) {
     (void)Sender;
 
     if (ExportCellsCheck->Checked) {
-        // Clear frames checkbox - mutually exclusive
-        ExportFramesCheck->Checked = false;
-
         // Start streaming export (cells mode generates filename automatically)
         exportFrameMode = false;
         StartCSVExport(false);  // Always overwrite for auto-generated filenames
@@ -2186,25 +2179,22 @@ void __fastcall TMainForm::ExportCellsCheckClick(TObject *Sender) {
 }
 
 //---------------------------------------------------------------------------
-void __fastcall TMainForm::ExportFramesCheckClick(TObject *Sender) {
-    (void)Sender;
-
-    if (ExportFramesCheck->Checked) {
-        // Clear cells checkbox - mutually exclusive
-        ExportCellsCheck->Checked = false;
-    } else {
-        StopCSVExport();
-    }
-    // Note: Export is now started by Append/Overwrite buttons
-}
-
-//---------------------------------------------------------------------------
 void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
     (void)Sender;
+
+    // Set default filename from the filename edit field
+    if (ExportFilenameEdit && !ExportFilenameEdit->Text.IsEmpty()) {
+        SaveDialog->FileName = ExportFilenameEdit->Text;
+    }
 
     // Open file in append mode
     if (SaveDialog->Execute()) {
         String filename = SaveDialog->FileName;
+
+        // Update the filename field
+        if (ExportFilenameEdit) {
+            ExportFilenameEdit->Text = filename;
+        }
 
         // Check if file exists
         bool fileExists = FileExists(filename);
@@ -2220,7 +2210,13 @@ void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
 
         // If file is empty/new, write header
         if (!fileExists || csvFile->tellp() == 0) {
-            *csvFile << "Timestamp,FrameCounter,Cell,Voltage_mV,Temperature_C\n";
+            // Parse cell count to build header
+            uint8_t cellCount = frameBuffer[21];
+            *csvFile << "Timestamp,CellsExpected,CellsReceived";
+            for (int i = 0; i < cellCount; i++) {
+                *csvFile << ",V" << (i + 1) << ",T" << (i + 1);
+            }
+            *csvFile << std::endl;
         }
 
         // Write current frame from frameBuffer
@@ -2241,9 +2237,19 @@ void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
 void __fastcall TMainForm::ExportOverwriteButtonClick(TObject *Sender) {
     (void)Sender;
 
+    // Set default filename from the filename edit field
+    if (ExportFilenameEdit && !ExportFilenameEdit->Text.IsEmpty()) {
+        SaveDialog->FileName = ExportFilenameEdit->Text;
+    }
+
     // Open file in overwrite mode
     if (SaveDialog->Execute()) {
         String filename = SaveDialog->FileName;
+
+        // Update the filename field
+        if (ExportFilenameEdit) {
+            ExportFilenameEdit->Text = filename;
+        }
 
         // Open in overwrite mode (truncate)
         csvFile = new std::ofstream(filename.c_str(), std::ios::trunc);
@@ -2255,7 +2261,12 @@ void __fastcall TMainForm::ExportOverwriteButtonClick(TObject *Sender) {
         }
 
         // Write header
-        *csvFile << "Timestamp,FrameCounter,Cell,Voltage_mV,Temperature_C\n";
+        uint8_t cellCount = frameBuffer[21];
+        *csvFile << "Timestamp,CellsExpected,CellsReceived";
+        for (int i = 0; i < cellCount; i++) {
+            *csvFile << ",V" << (i + 1) << ",T" << (i + 1);
+        }
+        *csvFile << std::endl;
 
         // Write current frame from frameBuffer
         exportFrameMode = true;
@@ -2282,7 +2293,6 @@ void TMainForm::StartCSVExport(bool appendMode) {
     if (exportModuleId == 0) {
         ShowError("Please select a module before starting export");
         ExportCellsCheck->Checked = false;
-        ExportFramesCheck->Checked = false;
         return;
     }
 
@@ -2290,7 +2300,6 @@ void TMainForm::StartCSVExport(bool appendMode) {
     if (module == NULL) {
         ShowError("Selected module not found");
         ExportCellsCheck->Checked = false;
-        ExportFramesCheck->Checked = false;
         return;
     }
 
@@ -2299,7 +2308,6 @@ void TMainForm::StartCSVExport(bool appendMode) {
     if (exportExpectedCount == 0) {
         ShowError("Module has no cells configured");
         ExportCellsCheck->Checked = false;
-        ExportFramesCheck->Checked = false;
         return;
     }
 
@@ -2310,7 +2318,6 @@ void TMainForm::StartCSVExport(bool appendMode) {
         filename = ExportFilenameEdit->Text.Trim();
         if (filename.IsEmpty()) {
             ShowError("Please enter a filename");
-            ExportFramesCheck->Checked = false;
             return;
         }
     } else {
@@ -2341,7 +2348,6 @@ void TMainForm::StartCSVExport(bool appendMode) {
         csvFile = NULL;
         ShowError("Failed to open CSV file: " + filename);
         ExportCellsCheck->Checked = false;
-        ExportFramesCheck->Checked = false;
         return;
     }
 
@@ -2758,29 +2764,32 @@ void TMainForm::WriteFrameToCSV() {
     for (int stringIdx = 0; stringIdx < readingCount && stringIdx < nstrings; stringIdx++) {
         int stringOffset = METADATA_SIZE + (stringIdx * bytesPerString);
 
-        // Write timestamp from frame metadata
-        *csvFile << timestamp << ",";
+        // Convert timestamp to readable format
+        time_t ts = (time_t)timestamp;
+        struct tm* timeinfo = localtime(&ts);
+        char timebuffer[30];
+        strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d %H:%M:%S", timeinfo);
 
-        // Write cell counts
-        *csvFile << (int)cellCountExpected << ",";
-        *csvFile << (int)cellCountExpected << ",";  // Assume all cells reported
+        // Write timestamp
+        *csvFile << timebuffer << ",";
+
+        // Write cell counts (expected and received - assume all reported for now)
+        *csvFile << (int)cellCountExpected << "," << (int)cellCountExpected;
 
         // Write cell voltages and temperatures
         for (int cellIdx = 0; cellIdx < cellCountExpected; cellIdx++) {
             int cellOffset = stringOffset + (cellIdx * CELL_DATA_SIZE);
 
             // Parse voltage (uint16_t millivolts)
-            uint16_t* pVoltage = (uint16_t*)&frameBuffer[cellOffset];
-            float voltageV = (*pVoltage) / 1000.0f;
+            uint16_t rawVoltage = ReadUint16LE(frameBuffer, cellOffset);
+            float voltageV = rawVoltage / 1000.0f;
 
             // Parse temperature (int16_t, tenths of degree C)
-            int16_t* pTemperature = (int16_t*)&frameBuffer[cellOffset + 2];
-            float tempC = (*pTemperature) / 10.0f;
+            int16_t rawTemp = ReadInt16LE(frameBuffer, cellOffset + 2);
+            float tempC = rawTemp / 10.0f;
 
-            *csvFile << voltageV << "," << tempC;
-            if (cellIdx < cellCountExpected - 1) {
-                *csvFile << ",";
-            }
+            *csvFile << "," << std::fixed << std::setprecision(3) << voltageV;
+            *csvFile << "," << std::fixed << std::setprecision(1) << tempC;
         }
         *csvFile << std::endl;
     }
