@@ -101,7 +101,6 @@ __published:	// IDE-managed Components
     TButton *FrameNumberDecButton;
     TButton *FrameNumberIncButton;
     TButton *FrameNumberCurrentButton;
-    TCheckBox *ExportFramesCheck;
     TLabel *ExportFileLabel;
     TEdit *ExportFilenameEdit;
     TButton *ExportAppendButton;
@@ -180,7 +179,6 @@ __published:	// IDE-managed Components
     void __fastcall FormDestroy(TObject *Sender);
     void __fastcall DetailsPageControlChange(TObject *Sender);
     void __fastcall ExportCellsCheckClick(TObject *Sender);
-    void __fastcall ExportFramesCheckClick(TObject *Sender);
     void __fastcall ExportAppendButtonClick(TObject *Sender);
     void __fastcall ExportOverwriteButtonClick(TObject *Sender);
     void __fastcall GetFrameButtonClick(TObject *Sender);
