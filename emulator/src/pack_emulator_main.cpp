@@ -2703,24 +2703,89 @@ static inline float ConvertCurrent(uint16_t rawValue) {
 }
 
 static inline float ConvertTemperature(int16_t rawValue) {
-    // NOTE: Temperature values in frame are ALREADY converted by ModuleCPU
-    // (via CellDataConvertTemperature) and stored in 100ths of degrees C
-    // with TEMPERATURE_BASE offset applied.
-    const int16_t TEMPERATURE_BASE = 5535;  // 55.35°C offset (in 100ths)
+    // Temperature in frame is stored as RAW MCP9843 format from CellCPU
+    // Need to convert using same formula as ModuleCPU CellDataConvertTemperature
+    // MCP9843 format: signed 8.4 fixed point
+    // Bits 0-3: 16ths of a degree C
+    // Bits 4-11: Whole degrees C
+    // Bit 12: Sign bit (0=positive, 1=negative)
+
     const int16_t TEMPERATURE_INVALID = 0x7FFF;
+    const int16_t TEMPERATURE_BASE = 5535;  // 55.35°C offset (in 100ths)
+
+    // Fractional lookup table (from ModuleCPU)
+    static const uint8_t fractionalLookup[16] = {
+        0, 6, 13, 19, 25, 31, 38, 44, 50, 56, 63, 69, 75, 81, 88, 94
+    };
 
     if (rawValue == TEMPERATURE_INVALID) {
-        return 0.0f;  // Invalid temperature
+        return 0.0f;
     }
 
-    // Subtract base offset and convert from 100ths of degrees C to degrees C
-    return (rawValue - TEMPERATURE_BASE) / 100.0f;
+    int16_t temperature = rawValue;
+
+    // First clear I2C status bit (bit 15, 0x8000) - always clear regardless of sign
+    temperature &= ~0x8000;
+
+    uint8_t fractional = (uint8_t)(temperature & 0x0f);
+
+    if (temperature & (1 << 12)) {
+        // Negative - sign extend from bit 12
+        temperature |= 0xf000;
+    }
+
+    // Convert to whole degrees
+    temperature >>= 4;
+
+    // Scale to 100ths of degrees C and add TEMPERATURE_BASE offset
+    temperature = (temperature * 100) + (int16_t)fractionalLookup[fractional];
+    temperature += TEMPERATURE_BASE;
+
+    // Temperature is now in 100ths of degrees C with TEMPERATURE_BASE offset applied
+    // The TEMPERATURE_BASE makes 0°C = 5535, so we subtract it to get actual °C
+    return (temperature - TEMPERATURE_BASE) / 100.0f;
+}
+
+static inline float ConvertCellVoltage(uint16_t rawValue) {
+    // Cell voltages in frame are stored as RAW ADC values from CellCPU
+    // Convert using same logic as ModuleCPU CellDataConvertVoltage, but with floating point
+    // From ModuleCPU main.c:
+    // CELL_DIV_TOP = 90900, CELL_DIV_BOTTOM = 30100
+    // CELL_VOLTAGE_SCALE = 30100 / 121000 = 0.2487603306
+    // CELL_VREF = 1.1V
+    // CELL_VOLTAGE_CAL = 1.032
+
+    const uint16_t CELL_VOLTAGE_BITS = 10;
+    const float CELL_DIV_TOP = 90900.0f;
+    const float CELL_DIV_BOTTOM = 30100.0f;
+    const float CELL_VOLTAGE_SCALE = CELL_DIV_BOTTOM / (CELL_DIV_TOP + CELL_DIV_BOTTOM);
+    const float CELL_VREF = 1.1f;
+    const float CELL_VOLTAGE_CAL = 1.032f;
+    const uint16_t ADC_MAX_VALUE = 1024;  // 2^10
+
+    uint16_t voltage = rawValue & ((1 << CELL_VOLTAGE_BITS) - 1);  // Mask to 10 bits
+
+    if (voltage == 0 || voltage == 0xFFFF) {
+        return 0.0f;  // Invalid
+    }
+
+    // Convert from ADC value to volts
+    // ADC reads voltage after divider, convert back to actual cell voltage in millivolts
+    float voltageMv = ((float)voltage / (float)ADC_MAX_VALUE) * CELL_VREF * 1000.0f / CELL_VOLTAGE_SCALE * CELL_VOLTAGE_CAL;
+
+    return voltageMv / 1000.0f;  // Convert mV to V
 }
 
 //---------------------------------------------------------------------------
 void TMainForm::WriteFrameToCSV() {
     // Only process if export frames mode is enabled
-    if (!exportFrameMode || csvFile == NULL) {
+    if (!exportFrameMode) {
+        frameTransferState = FRAME_IDLE;
+        return;
+    }
+
+    if (csvFile == NULL || !csvFile->is_open()) {
+        LogMessage("Error: CSV file is not open for writing");
         frameTransferState = FRAME_IDLE;
         return;
     }
@@ -2731,9 +2796,9 @@ void TMainForm::WriteFrameToCSV() {
     // uint16_t frameBytes (4), uint64_t timestamp (6), uint32_t moduleUniqueId (14)...
 
     // Check valid signature at offset 0
-    uint16_t* pValidSig = (uint16_t*)&frameBuffer[0];
-    if (*pValidSig != 0xBA77) {
-        LogMessage("Warning: Frame has invalid signature 0x" + IntToHex((int)*pValidSig, 4) + ", skipping export");
+    uint16_t validSig = ReadUint16LE(frameBuffer, 0);
+    if (validSig != 0xBA77) {
+        LogMessage("Warning: Frame has invalid signature 0x" + IntToHex((int)validSig, 4) + ", skipping export");
         frameTransferState = FRAME_IDLE;
         return;
     }
@@ -2768,7 +2833,12 @@ void TMainForm::WriteFrameToCSV() {
         time_t ts = (time_t)timestamp;
         struct tm* timeinfo = localtime(&ts);
         char timebuffer[30];
-        strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+        if (timeinfo != NULL) {
+            strftime(timebuffer, sizeof(timebuffer), "%Y-%m-%d %H:%M:%S", timeinfo);
+        } else {
+            // Fallback to raw timestamp if conversion fails
+            sprintf(timebuffer, "%llu", timestamp);
+        }
 
         // Write timestamp
         *csvFile << timebuffer << ",";
@@ -2780,13 +2850,20 @@ void TMainForm::WriteFrameToCSV() {
         for (int cellIdx = 0; cellIdx < cellCountExpected; cellIdx++) {
             int cellOffset = stringOffset + (cellIdx * CELL_DATA_SIZE);
 
-            // Parse voltage (uint16_t millivolts)
-            uint16_t rawVoltage = ReadUint16LE(frameBuffer, cellOffset);
-            float voltageV = rawVoltage / 1000.0f;
+            // Bounds check to prevent buffer overflow
+            if (cellOffset + CELL_DATA_SIZE > 1024) {
+                LogMessage("Warning: Cell data offset " + IntToStr(cellOffset) +
+                          " exceeds frame buffer, skipping remaining cells");
+                break;
+            }
 
-            // Parse temperature (int16_t, tenths of degree C)
+            // Parse voltage (RAW 10-bit ADC value from CellCPU)
+            uint16_t rawVoltage = ReadUint16LE(frameBuffer, cellOffset);
+            float voltageV = ConvertCellVoltage(rawVoltage);
+
+            // Parse temperature (RAW MCP9843 format from CellCPU)
             int16_t rawTemp = ReadInt16LE(frameBuffer, cellOffset + 2);
-            float tempC = rawTemp / 10.0f;
+            float tempC = ConvertTemperature(rawTemp);
 
             *csvFile << "," << std::fixed << std::setprecision(3) << voltageV;
             *csvFile << "," << std::fixed << std::setprecision(1) << tempC;
