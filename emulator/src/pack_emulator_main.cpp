@@ -2680,27 +2680,27 @@ void TMainForm::WriteFrameToCSV() {
 
     // Parse frame metadata from frameBuffer (based on STORE.h FrameMetadata structure)
     // Offsets based on FrameMetadata in STORE.h:
-    // uint32_t validSig (0), uint8_t version (4), uint8_t cellBufferStart (5),
-    // uint16_t frameBytes (6), uint64_t timestamp (8), uint32_t moduleUniqueId (16)...
+    // uint16_t validSig (0), uint8_t version (2), uint8_t cellBufferStart (3),
+    // uint16_t frameBytes (4), uint64_t timestamp (6), uint32_t moduleUniqueId (14)...
 
     // Check valid signature at offset 0
-    uint32_t* pValidSig = (uint32_t*)&frameBuffer[0];
+    uint16_t* pValidSig = (uint16_t*)&frameBuffer[0];
     if (*pValidSig != 0xBA77) {
-        LogMessage("Warning: Frame has invalid signature 0x" + IntToHex((int)*pValidSig, 8) + ", skipping export");
+        LogMessage("Warning: Frame has invalid signature 0x" + IntToHex((int)*pValidSig, 4) + ", skipping export");
         frameTransferState = FRAME_IDLE;
         return;
     }
 
     // Parse key metadata fields using unaligned reads (NO PADDING on AVR)
-    uint8_t cellBufferStart = frameBuffer[5];
-    uint64_t timestamp = ReadUint64LE(frameBuffer, 8);
-    uint8_t cellCountExpected = frameBuffer[23];
+    uint8_t cellBufferStart = frameBuffer[3];
+    uint64_t timestamp = ReadUint64LE(frameBuffer, 6);
+    uint8_t cellCountExpected = frameBuffer[21];
 
     // Circular buffer fields
-    uint32_t frameCounter = ReadUint32LE(frameBuffer, 87);
-    uint16_t nstrings = ReadUint16LE(frameBuffer, 91);
-    uint16_t currentIndex = ReadUint16LE(frameBuffer, 93);
-    uint16_t readingCount = ReadUint16LE(frameBuffer, 95);
+    uint32_t frameCounter = ReadUint32LE(frameBuffer, 85);
+    uint16_t nstrings = ReadUint16LE(frameBuffer, 89);
+    uint16_t currentIndex = ReadUint16LE(frameBuffer, 91);
+    uint16_t readingCount = ReadUint16LE(frameBuffer, 93);
 
     if (readingCount == 0 || cellCountExpected == 0) {
         LogMessage("No readings in frame (count=" + IntToStr(readingCount) + ", cells=" + IntToStr(cellCountExpected) + "), skipping export");
@@ -2781,65 +2781,65 @@ void TMainForm::DisplayFrameMetadata() {
     // Manually calculated offsets for packed struct
 
     // Basic frame identification
-    uint32_t validSig = ReadUint32LE(frameBuffer, 0);
-    uint8_t version = frameBuffer[4];
-    uint8_t cellBufferStart = frameBuffer[5];
-    uint16_t frameBytes = ReadUint16LE(frameBuffer, 6);
-    uint64_t timestamp = ReadUint64LE(frameBuffer, 8);
-    uint32_t moduleUniqueId = ReadUint32LE(frameBuffer, 16);
+    uint16_t validSig = ReadUint16LE(frameBuffer, 0);
+    uint8_t version = frameBuffer[2];
+    uint8_t cellBufferStart = frameBuffer[3];
+    uint16_t frameBytes = ReadUint16LE(frameBuffer, 4);
+    uint64_t timestamp = ReadUint64LE(frameBuffer, 6);
+    uint32_t moduleUniqueId = ReadUint32LE(frameBuffer, 14);
 
     // Session statistics
-    uint8_t sg_u8WDTCount = frameBuffer[20];
-    uint8_t sg_u8CellCPUCountFewest = frameBuffer[21];
-    uint8_t sg_u8CellCPUCountMost = frameBuffer[22];
-    uint8_t sg_u8CellCountExpected = frameBuffer[23];
+    uint8_t sg_u8WDTCount = frameBuffer[18];
+    uint8_t sg_u8CellCPUCountFewest = frameBuffer[19];
+    uint8_t sg_u8CellCPUCountMost = frameBuffer[20];
+    uint8_t sg_u8CellCountExpected = frameBuffer[21];
 
     // Current measurements
-    uint16_t u16maxCurrent = ReadUint16LE(frameBuffer, 24);
-    uint16_t u16minCurrent = ReadUint16LE(frameBuffer, 26);
-    uint16_t u16avgCurrent = ReadUint16LE(frameBuffer, 28);
-    uint8_t sg_u8CurrentBufferIndex = frameBuffer[30];
+    uint16_t u16maxCurrent = ReadUint16LE(frameBuffer, 22);
+    uint16_t u16minCurrent = ReadUint16LE(frameBuffer, 24);
+    uint16_t u16avgCurrent = ReadUint16LE(frameBuffer, 26);
+    uint8_t sg_u8CurrentBufferIndex = frameBuffer[28];
 
     // String voltage measurements
-    int32_t sg_i32VoltageStringMin = ReadInt32LE(frameBuffer, 31);
-    int32_t sg_i32VoltageStringMax = ReadInt32LE(frameBuffer, 35);
-    int16_t sg_i16VoltageStringPerADC = ReadInt16LE(frameBuffer, 39);
-    bool bDischargeOn = frameBuffer[41];
+    int32_t sg_i32VoltageStringMin = ReadInt32LE(frameBuffer, 29);
+    int32_t sg_i32VoltageStringMax = ReadInt32LE(frameBuffer, 33);
+    int16_t sg_i16VoltageStringPerADC = ReadInt16LE(frameBuffer, 37);
+    bool bDischargeOn = frameBuffer[39];
 
     // Communication statistics
-    uint16_t sg_u16CellCPUI2CErrors = ReadUint16LE(frameBuffer, 42);
-    uint8_t sg_u8CellFirstI2CError = frameBuffer[44];
-    uint16_t sg_u16BytesReceived = ReadUint16LE(frameBuffer, 45);
-    uint8_t sg_u8CellCPUCount = frameBuffer[47];
-    uint8_t sg_u8MCRXFramingErrors = frameBuffer[48];
-    uint8_t sg_u8LastCompleteCellCount = frameBuffer[49];
+    uint16_t sg_u16CellCPUI2CErrors = ReadUint16LE(frameBuffer, 40);
+    uint8_t sg_u8CellFirstI2CError = frameBuffer[42];
+    uint16_t sg_u16BytesReceived = ReadUint16LE(frameBuffer, 43);
+    uint8_t sg_u8CellCPUCount = frameBuffer[45];
+    uint8_t sg_u8MCRXFramingErrors = frameBuffer[46];
+    uint8_t sg_u8LastCompleteCellCount = frameBuffer[47];
 
     // Frame-specific measurements
-    uint16_t u16frameCurrent = ReadUint16LE(frameBuffer, 50);
-    int16_t sg_s16HighestCellTemp = ReadInt16LE(frameBuffer, 52);
-    int16_t sg_s16LowestCellTemp = ReadInt16LE(frameBuffer, 54);
-    int16_t sg_s16AverageCellTemp = ReadInt16LE(frameBuffer, 56);
+    uint16_t u16frameCurrent = ReadUint16LE(frameBuffer, 48);
+    int16_t sg_s16HighestCellTemp = ReadInt16LE(frameBuffer, 50);
+    int16_t sg_s16LowestCellTemp = ReadInt16LE(frameBuffer, 52);
+    int16_t sg_s16AverageCellTemp = ReadInt16LE(frameBuffer, 54);
 
     // Cell voltage statistics
-    uint16_t sg_u16HighestCellVoltage = ReadUint16LE(frameBuffer, 58);
-    uint16_t sg_u16LowestCellVoltage = ReadUint16LE(frameBuffer, 60);
-    uint16_t sg_u16AverageCellVoltage = ReadUint16LE(frameBuffer, 62);
-    uint32_t sg_u32CellVoltageTotal = ReadUint32LE(frameBuffer, 64);
-    int32_t sg_i32VoltageStringTotal = ReadInt32LE(frameBuffer, 68);
+    uint16_t sg_u16HighestCellVoltage = ReadUint16LE(frameBuffer, 56);
+    uint16_t sg_u16LowestCellVoltage = ReadUint16LE(frameBuffer, 58);
+    uint16_t sg_u16AverageCellVoltage = ReadUint16LE(frameBuffer, 60);
+    uint32_t sg_u32CellVoltageTotal = ReadUint32LE(frameBuffer, 62);
+    int32_t sg_i32VoltageStringTotal = ReadInt32LE(frameBuffer, 66);
 
-    // ADCReadings array at offset 72 (5 * 3 bytes = 15 bytes) - skip for now
+    // ADCReadings array at offset 70 (5 * 3 bytes = 15 bytes) - skip for now
 
     // Frame counter and circular buffer
-    uint32_t frameCounter = ReadUint32LE(frameBuffer, 87);
-    uint16_t nstrings = ReadUint16LE(frameBuffer, 91);
-    uint16_t currentIndex = ReadUint16LE(frameBuffer, 93);
-    uint16_t readingCount = ReadUint16LE(frameBuffer, 95);
+    uint32_t frameCounter = ReadUint32LE(frameBuffer, 85);
+    uint16_t nstrings = ReadUint16LE(frameBuffer, 89);
+    uint16_t currentIndex = ReadUint16LE(frameBuffer, 91);
+    uint16_t readingCount = ReadUint16LE(frameBuffer, 93);
 
     // Display all fields with proper formatting and conversions
     char buffer[256];
 
     FrameMetadataMemo->Lines->Add("=== FRAME IDENTIFICATION ===");
-    sprintf(buffer, "Valid Signature: 0x%08X %s", validSig,
+    sprintf(buffer, "Valid Signature: 0x%04X %s", validSig,
             (validSig == 0xBA77 ? "(OK)" : "(INVALID)"));
     FrameMetadataMemo->Lines->Add(String(buffer));
     sprintf(buffer, "Version: %u", version);
