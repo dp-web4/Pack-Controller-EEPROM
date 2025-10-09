@@ -2202,32 +2202,73 @@ void __fastcall TMainForm::ExportFramesCheckClick(TObject *Sender) {
 void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
     (void)Sender;
 
-    // Append/Overwrite buttons only in Frames tab, always use frame mode
-    exportFrameMode = true;
+    // Open file in append mode
+    if (SaveDialogCSV->Execute()) {
+        String filename = SaveDialogCSV->FileName;
 
-    // Enable the export checkbox
-    if (ExportFramesCheck) {
-        ExportFramesCheck->Checked = true;
+        // Check if file exists
+        bool fileExists = FileExists(filename);
+
+        // Open in append mode
+        csvFile = new std::ofstream(filename.c_str(), std::ios::app);
+        if (!csvFile->is_open()) {
+            LogMessage("Failed to open CSV file for append: " + filename);
+            delete csvFile;
+            csvFile = NULL;
+            return;
+        }
+
+        // If file is empty/new, write header
+        if (!fileExists || csvFile->tellp() == 0) {
+            *csvFile << "Timestamp,FrameCounter,Cell,Voltage_mV,Temperature_C\n";
+        }
+
+        // Write current frame from frameBuffer
+        exportFrameMode = true;
+        WriteFrameToCSV();
+
+        // Close file
+        csvFile->close();
+        delete csvFile;
+        csvFile = NULL;
+        exportFrameMode = false;
+
+        LogMessage("Frame appended to: " + filename);
     }
-
-    // Start export in append mode
-    StartCSVExport(true);
 }
 
 //---------------------------------------------------------------------------
 void __fastcall TMainForm::ExportOverwriteButtonClick(TObject *Sender) {
     (void)Sender;
 
-    // Append/Overwrite buttons only in Frames tab, always use frame mode
-    exportFrameMode = true;
+    // Open file in overwrite mode
+    if (SaveDialogCSV->Execute()) {
+        String filename = SaveDialogCSV->FileName;
 
-    // Enable the export checkbox
-    if (ExportFramesCheck) {
-        ExportFramesCheck->Checked = true;
+        // Open in overwrite mode (truncate)
+        csvFile = new std::ofstream(filename.c_str(), std::ios::trunc);
+        if (!csvFile->is_open()) {
+            LogMessage("Failed to open CSV file for overwrite: " + filename);
+            delete csvFile;
+            csvFile = NULL;
+            return;
+        }
+
+        // Write header
+        *csvFile << "Timestamp,FrameCounter,Cell,Voltage_mV,Temperature_C\n";
+
+        // Write current frame from frameBuffer
+        exportFrameMode = true;
+        WriteFrameToCSV();
+
+        // Close file
+        csvFile->close();
+        delete csvFile;
+        csvFile = NULL;
+        exportFrameMode = false;
+
+        LogMessage("Frame written to: " + filename);
     }
-
-    // Start export in overwrite mode
-    StartCSVExport(false);
 }
 
 //---------------------------------------------------------------------------
