@@ -2203,8 +2203,8 @@ void __fastcall TMainForm::ExportAppendButtonClick(TObject *Sender) {
     (void)Sender;
 
     // Open file in append mode
-    if (SaveDialogCSV->Execute()) {
-        String filename = SaveDialogCSV->FileName;
+    if (SaveDialog->Execute()) {
+        String filename = SaveDialog->FileName;
 
         // Check if file exists
         bool fileExists = FileExists(filename);
@@ -2242,8 +2242,8 @@ void __fastcall TMainForm::ExportOverwriteButtonClick(TObject *Sender) {
     (void)Sender;
 
     // Open file in overwrite mode
-    if (SaveDialogCSV->Execute()) {
-        String filename = SaveDialogCSV->FileName;
+    if (SaveDialog->Execute()) {
+        String filename = SaveDialog->FileName;
 
         // Open in overwrite mode (truncate)
         csvFile = new std::ofstream(filename.c_str(), std::ios::trunc);
