@@ -1,0 +1,67 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite it as below."
+type: software
+title: "Pack-Controller-EEPROM: System-Level Battery Management Orchestration"
+abstract: "STM32WB55 dual-core pack controller for hierarchical battery management. Coordinates up to 32 battery modules (4,096 cells total) with dual CAN bus architecture, flash-based EEPROM emulation, and Bluetooth LE hardware. Demonstrates system-level orchestration with memory as temporal sensor in distributed energy systems."
+authors:
+  - family-names: "Palatov"
+    given-names: "Dennis"
+    orcid: "https://orcid.org/0009-0006-5510-6445"
+    affiliation: "Modular Battery Technologies, Inc."
+repository-code: "https://github.com/dp-web4/Pack-Controller-EEPROM"
+url: "https://github.com/dp-web4/Pack-Controller-EEPROM"
+keywords:
+  - battery-management-system
+  - bms
+  - embedded-systems
+  - stm32
+  - arm-cortex-m4
+  - pack-controller
+  - can-bus
+  - dual-can
+  - eeprom-emulation
+  - hierarchical-control
+  - modbatt
+  - battery
+  - lithium-ion
+  - bluetooth-le
+  - system-orchestration
+  - distributed-intelligence
+  - web4
+  - synchronism
+  - iot
+  - electric-vehicle
+  - energy-storage
+  - vcu-interface
+  - memory-temporal-sensor
+  - wear-leveling
+license: AGPL-3.0-or-later
+license-url: "https://github.com/dp-web4/Pack-Controller-EEPROM/blob/main/LICENSE"
+version: "1.0.0-oss"
+date-released: "2025-10-19"
+references:
+  - type: software
+    title: "Web4: Trust-Native Internet Architecture"
+    repository-code: "https://github.com/dp-web4/web4"
+  - type: software
+    title: "Synchronism Framework"
+    repository-code: "https://github.com/dp-web4/Synchronism"
+  - type: software
+    title: "CellCPU: Cell-Level Battery Management"
+    repository-code: "https://github.com/dp-web4/CellCPU"
+  - type: software
+    title: "ModuleCPU: Module-Level Battery Management"
+    repository-code: "https://github.com/dp-web4/ModuleCPU"
+identifiers:
+  - type: url
+    value: "https://github.com/dp-web4/Pack-Controller-EEPROM"
+    description: "GitHub Repository"
+  - type: other
+    value: "US11575270B1"
+    description: "US Patent 11,575,270: Pack control systems and methods"
+  - type: other
+    value: "US11699817B1"
+    description: "US Patent 11,699,817: System, pack and module controllers, blockchain integration"
+  - type: other
+    value: "US11469470B1"
+    description: "US Patent 11,469,470: Hierarchical battery management architecture"
